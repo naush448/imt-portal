@@ -2769,12 +2769,14 @@ async function loadOrdersFromDB(){
       id:o.id,repKey:o.rep_key,repName:o.rep_name,custKey:o.cust_key,
       custName:o.cust_name,items:o.items,total:Number(o.total),status:o.status,
       note:o.note,date:o.date,autoApproved:o.auto_approved,
-      approvedAt:o.approved_at,dispatchedAt:o.dispatched_at
+      approvedAt:o.approved_at,dispatchedAt:o.dispatched_at,
+      cancel_reason:o.cancel_reason||'',cancelledAt:o.cancelledat||''
     }));
     DIST_ORDERS=data.filter(o=>o.type==='dist').map(o=>({
       id:o.id,distKey:o.dist_key,dist:o.dist_name,items:o.items,
       total:Number(o.total),status:o.status,note:o.note,date:o.date,
-      approvedAt:o.approved_at,dispatchedAt:o.dispatched_at
+      approvedAt:o.approved_at,dispatchedAt:o.dispatched_at,
+      cancel_reason:o.cancel_reason||'',cancelledAt:o.cancelledat||''
     }));
   }catch(e){console.error('loadOrdersFromDB:',e);}
 }
@@ -7088,29 +7090,59 @@ function renderInvoiceRegister(){
   else if(filter==='month')list=list.filter(i=>new Date(i.createdAt)>=monthStart);
   if(search)list=list.filter(i=>i.custName.toLowerCase().includes(search)||i.id.toLowerCase().includes(search));
 
+  // Sort by createdAt desc (most recent first)
+  list=list.slice().sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
   const badge=document.getElementById('invListCount');if(badge)badge.textContent=list.length+' invoice'+(list.length!==1?'s':'');
   const el=document.getElementById('invList');if(!el)return;
   if(!list.length){el.innerHTML='<div style="text-align:center;padding:32px;color:var(--t3);font-size:13px">No invoices match.</div>';return;}
   let html='';
   for(var i=0;i<list.length;i++){
     var inv=list[i];
-    html+='<div style="padding:11px 18px;border-bottom:0.5px solid var(--b);display:flex;align-items:center;gap:14px">'
-      +'<div style="flex:1;min-width:0">'
-        +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">'
-          +'<span style="font-size:14px;font-weight:800;color:var(--teal)">'+inv.id+'</span>'
-          +'<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:'+(inv.type==='direct'?'var(--amber-bg)':'var(--blue-bg)')+';color:'+(inv.type==='direct'?'var(--amber)':'var(--blue)')+'">'+( inv.type==='direct'?'Direct':'Order')+'</span>'
+    var oit=Array.isArray(inv.items)?inv.items:(inv.items?JSON.parse(inv.items):[]);
+    var typeCol=inv.type==='direct'?'var(--amber)':'var(--blue)';
+    var typeBg=inv.type==='direct'?'var(--amber-bg)':'var(--blue-bg)';
+    html+='<div style="border-bottom:0.5px solid var(--b)">'
+      // Header row — always visible
+      +'<div onclick="toggleInvExpand(\'inv-exp-'+i+'\')" style="padding:12px 18px;display:flex;align-items:center;gap:12px;cursor:pointer;user-select:none">'
+        +'<div style="flex:1;min-width:0">'
+          +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">'
+            +'<span style="font-size:14px;font-weight:800;color:var(--teal)">'+inv.id+'</span>'
+            +'<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:'+typeBg+';color:'+typeCol+'">'+( inv.type==='direct'?'Direct':'Order')+'</span>'
+          +'</div>'
+          +'<div style="font-size:13px;font-weight:600">'+inv.custName+'</div>'
+          +'<div style="font-size:11px;color:var(--t3)">'+inv.date+(inv.orderId?' · Order: '+inv.orderId:'')+(inv.repName?' · '+inv.repName:'')+'</div>'
         +'</div>'
-        +'<div style="font-size:13px;font-weight:600">'+inv.custName+'</div>'
-        +'<div style="font-size:11px;color:var(--t3)">'+inv.date+(inv.orderId?' · From '+inv.orderId:'')+(inv.repName?' · '+inv.repName:'')+'</div>'
+        +'<div style="text-align:right;flex-shrink:0">'
+          +'<div style="font-size:15px;font-weight:800;color:var(--teal)">LKR '+inv.total.toLocaleString()+'</div>'
+          +'<div style="font-size:11px;color:var(--t3)">'+oit.length+' item'+(oit.length!==1?'s':'')+'</div>'
+        +'</div>'
+        +'<span id="inv-arr-'+i+'" style="font-size:16px;color:var(--t3);flex-shrink:0;transition:transform .2s">▸</span>'
       +'</div>'
-      +'<div style="text-align:right;flex-shrink:0">'
-        +'<div style="font-size:15px;font-weight:800;color:var(--teal)">LKR '+inv.total.toLocaleString()+'</div>'
-        +'<div style="font-size:10px;color:var(--t3)">'+inv.items.length+' items</div>'
+      // Expandable detail
+      +'<div id="inv-exp-'+i+'" style="display:none;padding:0 18px 14px">'
+        +'<div style="background:var(--s2);border-radius:var(--rs);padding:8px 12px;margin-bottom:10px">'
+          +oit.map(function(it){return '<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:0.5px solid var(--b);font-size:12px">'
+            +'<span style="color:var(--t2)">• '+it.name+' <strong>× '+it.qty+'</strong></span>'
+            +'<span style="font-weight:600">LKR '+(it.sub||it.total||0).toLocaleString()+'</span>'
+          +'</div>';}).join('')
+          +'<div style="display:flex;justify-content:space-between;padding:6px 0 1px;font-weight:700;font-size:13px"><span>Total</span><span style="color:var(--teal)">LKR '+inv.total.toLocaleString()+'</span></div>'
+        +'</div>'
+        +(inv.note?'<div style="font-size:12px;color:var(--t2);margin-bottom:10px">📝 '+inv.note+'</div>':'')
+        +'<button data-iid="'+inv.id+'" onclick="event.stopPropagation();printInvoice(this.dataset.iid)" style="width:100%;padding:10px;background:var(--teal);color:#fff;border:none;border-radius:var(--rs);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">🖨️ Print / Download Invoice</button>'
       +'</div>'
-      +'<button data-iid="'+inv.id+'" onclick="printInvoice(this.dataset.iid)" style="padding:7px 14px;background:var(--s2);border:0.5px solid var(--b2);border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;flex-shrink:0">🖨️ Print</button>'
     +'</div>';
   }
   el.innerHTML=html;
+}
+
+// ── Invoice expand/collapse ──
+function toggleInvExpand(id){
+  const el=document.getElementById(id);if(!el)return;
+  const idx=id.replace('inv-exp-','');
+  const arr=document.getElementById('inv-arr-'+idx);
+  const open=el.style.display==='block';
+  el.style.display=open?'none':'block';
+  if(arr)arr.style.transform=open?'':'rotate(90deg)';
 }
 
 // ── Print Invoice ──
