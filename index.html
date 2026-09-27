@@ -1813,17 +1813,15 @@ tr:hover td{background:var(--s2)}
 
   <!-- Rep: My Invoices page -->
   <div class="page" id="p-r-invoices">
-    <div class="card">
-      <div class="ch">
-        <div>
-          <h3>🧾 My Invoices</h3>
-          <div style="font-size:11px;color:var(--t3);font-weight:400;margin-top:2px">Invoices generated from your approved orders</div>
-        </div>
-      </div>
-      <div id="rInvoiceList" style="padding:4px 0">
-        <div style="text-align:center;color:var(--t3);padding:32px;font-size:13px">Loading invoices…</div>
-      </div>
-    </div>
+    <div id="ai-rep-wrap"></div>
+  </div>
+
+  <!-- ═══════════════ ALL INVOICES — shared template (admin / warehouse / rep) ═══════════════ -->
+  <div class="page" id="p-a-allinvoices">
+    <div id="ai-admin-wrap"></div>
+  </div>
+  <div class="page" id="p-w-allinvoices">
+    <div id="ai-wh-wrap"></div>
   </div>
 
   <div class="page" id="p-a-access">
@@ -4264,7 +4262,7 @@ function buildSidebar(r){
     nav.innerHTML=`<div class="sb-sec">Overview</div>${n('p-a-dash',IC.grid,'Dashboard')}
     <div class="sb-sec">Distributor Channel</div>${n('p-a-dists',IC.users,'All Distributors')}${n('p-a-distdiscount',IC.tag,'Selective Discounts')}
     <div class="sb-sec">Sales Rep Channel</div>${n('p-a-reps',IC.bar,'Rep Performance')}${n('p-a-visits',IC.users,'Visit Tracker')}${n('p-a-managereps',IC.users,'Manage Rep Accounts')}${n('p-a-manageprods',IC.tag,'Manage Products')}${n('p-a-managecusts',IC.tag,'Manage Customers')}${n('p-a-offers',IC.bell,'Offers Board')}${n('p-a-cashback',IC.tag,'Cashback Products')}${n('p-a-slowstock',IC.bell,'Non-Moving Stock <span class="nb" style="background:var(--amber-bg);color:var(--amber)">18</span>')}
-    <div class="sb-sec">Finance</div>${n('p-a-payments',IC.dollar,'Payment Register')}${n('p-a-pnl',IC.dollar,'Profit & Loss')}${n('p-a-import',IC.file,'Import from Chart360')}
+    <div class="sb-sec">Finance</div>${n('p-a-allinvoices',IC.file,'All Invoices')}${n('p-a-payments',IC.dollar,'Payment Register')}${n('p-a-pnl',IC.dollar,'Profit & Loss')}${n('p-a-import',IC.file,'Import from Chart360')}
     <div class="sb-sec">Support</div>${n('p-a-agent',IC.chat,'Support')}
     <div class="sb-sec">Settings</div>${n('p-a-access',IC.users,'Access & Permissions')}${n('p-a-settings',IC.cog,'Commission & Cashback')}${n('p-a-wasettings',IC.bell,'WhatsApp & Warehouse')}`;
   } else if(r==='dist'){
@@ -4277,7 +4275,7 @@ function buildSidebar(r){
     ico.className='sb-ico wh';portal.textContent='Warehouse Portal';
     av.className='sb-av wh';av.textContent=(curWH?curWH.name.split(' ')[0].slice(0,2).toUpperCase():'WH');un.textContent=curWH?curWH.name:'Warehouse';ur.textContent='Warehouse · Limited access';
     tbr.innerHTML='<span class="pill" style="background:var(--amber-bg);color:var(--amber)">📦 Warehouse</span>';
-    nav.innerHTML=`<div class="sb-sec">Orders</div>${n('p-w-queue',IC.cart,'Dispatch Queue')}${n('p-w-history',IC.file,'Dispatch History')}${n('p-w-invoice',IC.file,'Invoice Register')}
+    nav.innerHTML=`<div class="sb-sec">Orders</div>${n('p-w-queue',IC.cart,'Dispatch Queue')}${n('p-w-history',IC.file,'Dispatch History')}${n('p-w-invoice',IC.file,'Invoice Register')}${n('p-w-allinvoices',IC.file,'All Invoices')}
     <div class="sb-sec">Returns</div>${n('p-w-returns',IC.file,'Returns to Process')}
     <div class="sb-sec">Payments</div>${n('p-w-payments',IC.dollar,'Record Payment')}
     <div class="sb-sec">Information</div>${n('p-w-customers',IC.users,'Customer Balances')}${n('p-w-promos',IC.tag,'Promotions & Offers')}
@@ -4290,6 +4288,7 @@ function buildSidebar(r){
     nav.innerHTML=`<div class="sb-sec">My Performance</div>${n('p-r-dash',IC.grid,'My Dashboard')}${n('p-r-customers',IC.users,'My Customers')}
     <div class="sb-sec">Sales Tools</div>${n('p-r-cashback',IC.bell,'Cashback Offers <span class="nb" style="background:var(--teal-bg);color:var(--teal)">${cbCount}</span>')}${n('p-r-order',IC.cart,'Place Order')}
     <div class="sb-sec">History</div>${n('p-r-myorders',IC.file,'My Orders')}${n('p-r-invoices',IC.file,'My Invoices')}${n('p-r-returns',IC.file,'My Returns')}`;
+
   }
   setTimeout(()=>{const f=nav.querySelector('.ni');if(f)f.classList.add('on');},10);
   buildMobileNav(r);
@@ -4334,7 +4333,9 @@ function goto(id,el){
   if(id==='p-a-payments')renderPaymentRegister();
   if(id==='p-w-payments')renderPaymentPage('wh');
   if(id==='p-w-invoice'){loadInvoicesFromDB().then(()=>renderInvoiceRegister());}
-  if(id==='p-r-invoices'){loadInvoicesFromDB().then(()=>renderRepInvoices());}
+  if(id==='p-r-invoices'){loadInvoicesFromDB().then(()=>renderAllInvoices('rep','ai-rep-wrap'));}
+  if(id==='p-a-allinvoices'){loadInvoicesFromDB().then(()=>renderAllInvoices('admin','ai-admin-wrap'));}
+  if(id==='p-w-allinvoices'){loadInvoicesFromDB().then(()=>renderAllInvoices('wh','ai-wh-wrap'));}
   updateMobTitle(id);
 }
 
@@ -5427,43 +5428,140 @@ function renderRepMyOrders(){
   }).join('');
 }
 
-function renderRepInvoices(){
-  const el=document.getElementById('rInvoiceList');if(!el)return;
-  const rk=repKey||'';
-  const mine=INVOICES.filter(inv=>inv.repKey===rk);
-  if(!mine.length){
-    el.innerHTML='<div style="text-align:center;color:var(--t3);padding:32px;font-size:13px">No invoices yet. Invoices appear here once your approved orders are processed by the warehouse.</div>';
-    return;
-  }
-  el.innerHTML=mine.map(inv=>{
-    const oit=Array.isArray(inv.items)?inv.items:(inv.items?JSON.parse(inv.items):[]);
-    return `<div style="border-bottom:0.5px solid var(--b);padding:14px 18px">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
-        <div>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
-            <span style="font-size:14px;font-weight:700">${inv.id}</span>
-            <span style="font-size:11px;background:var(--teal-bg);color:var(--teal);padding:2px 9px;border-radius:20px;font-weight:600">🚚 Dispatched</span>
-          </div>
-          <div style="font-size:13px;font-weight:600">${inv.custName||'—'}</div>
-          <div style="font-size:11px;color:var(--t3);margin-top:2px">Order: ${inv.orderId||'—'} · Date: ${inv.date||'—'}</div>
-        </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:18px;font-weight:700;color:var(--blue)">${fmt(inv.total)}</div>
-          <button onclick="printInvoice('${inv.id}')" style="margin-top:6px;padding:5px 12px;background:var(--teal);color:#fff;border:none;border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🖨 Print</button>
-        </div>
+// ══════════════════════ ALL INVOICES TABLE ══════════════════════
+// role: 'admin' | 'wh' | 'rep'   wrapperId: element id to render into
+// State stored on wrapper element as dataset to survive re-renders
+function renderAllInvoices(role, wrapperId){
+  const wrap=document.getElementById(wrapperId);if(!wrap)return;
+
+  // Read current filter state (or initialise)
+  let page=parseInt(wrap.dataset.aiPage||'0');
+  let search=(wrap.dataset.aiSearch||'').toLowerCase();
+  let filterRep=wrap.dataset.aiRep||'all';
+  let filterStatus=wrap.dataset.aiStatus||'all';
+  const PER_PAGE=50;
+
+  // Build base list
+  let list=INVOICES.slice();
+  // Rep: only their invoices
+  if(role==='rep') list=list.filter(inv=>inv.repKey===(repKey||''));
+  // Apply filters
+  if(search) list=list.filter(inv=>(inv.custName||'').toLowerCase().includes(search)||(inv.id||'').toLowerCase().includes(search));
+  if(filterRep!=='all') list=list.filter(inv=>(inv.repKey||'')=== filterRep);
+  if(filterStatus==='paid') list=list.filter(inv=>inv.status==='paid');
+  else if(filterStatus==='unpaid') list=list.filter(inv=>inv.status!=='paid');
+  // Sort newest first
+  list=list.slice().sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));
+  const total=list.length;
+  const pages=Math.max(1,Math.ceil(total/PER_PAGE));
+  if(page>=pages) page=pages-1;
+  const slice=list.slice(page*PER_PAGE,(page+1)*PER_PAGE);
+
+  // Build rep options for filter
+  const repNames={};
+  INVOICES.forEach(inv=>{if(inv.repKey&&inv.repName)repNames[inv.repKey]=inv.repName;});
+
+  // KPI totals (unfiltered by page, filtered by search/rep/status)
+  const kpiTotal=list.length;
+  const kpiValue=list.reduce((s,i)=>s+i.total,0);
+  const kpiUnpaid=list.filter(i=>i.status!=='paid').length;
+
+  // ── Build HTML ──
+  const showRepFilter=role!=='rep';
+
+  let html=`<div class="card">
+    <!-- KPI row -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:14px 18px;border-bottom:0.5px solid var(--b)">
+      <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:var(--teal)">${kpiTotal}</div><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em">Invoices</div></div>
+      <div style="text-align:center"><div style="font-size:18px;font-weight:800;color:var(--blue)">LKR ${kpiValue.toLocaleString()}</div><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em">Total Value</div></div>
+      <div style="text-align:center"><div style="font-size:22px;font-weight:800;color:var(--amber)">${kpiUnpaid}</div><div style="font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.05em">Unpaid</div></div>
+    </div>
+
+    <!-- Filters -->
+    <div style="padding:12px 18px;border-bottom:0.5px solid var(--b);display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+      <div style="flex:1;min-width:160px;position:relative">
+        <input id="${wrapperId}-search" type="text" value="${search.replace(/"/g,'&quot;')}" placeholder="Search customer or invoice #…"
+          oninput="document.getElementById('${wrapperId}').dataset.aiSearch=this.value;document.getElementById('${wrapperId}').dataset.aiPage=0;renderAllInvoices('${role}','${wrapperId}')"
+          style="width:100%;padding:9px 12px 9px 34px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:13px;font-family:inherit;background:var(--s2);color:var(--t);outline:none">
+        <svg style="position:absolute;left:10px;top:50%;transform:translateY(-50%);opacity:.4" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       </div>
-      <div style="background:var(--s2);border-radius:var(--rs);padding:8px 12px">
-        ${oit.map(i=>`<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;border-bottom:0.5px solid var(--b)">
-          <span style="color:var(--t2)">• ${i.name} <strong>× ${i.qty}</strong></span>
-          <span style="font-weight:600">${fmt(i.sub)}</span>
-        </div>`).join('')}
-        <div style="display:flex;justify-content:space-between;padding:5px 0 1px;font-weight:700;font-size:13px">
-          <span>Total</span><span style="color:var(--blue)">${fmt(inv.total)}</span>
-        </div>
-      </div>
-      ${inv.note?`<div style="margin-top:6px;font-size:12px;color:var(--t2)">📝 ${inv.note}</div>`:''}
+      <select onchange="document.getElementById('${wrapperId}').dataset.aiStatus=this.value;document.getElementById('${wrapperId}').dataset.aiPage=0;renderAllInvoices('${role}','${wrapperId}')"
+        style="padding:9px 12px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:13px;font-family:inherit;background:var(--s2);color:var(--t);outline:none">
+        <option value="all"${filterStatus==='all'?' selected':''}>All Status</option>
+        <option value="unpaid"${filterStatus==='unpaid'?' selected':''}>Unpaid</option>
+        <option value="paid"${filterStatus==='paid'?' selected':''}>Paid</option>
+      </select>
+      ${showRepFilter?`<select onchange="document.getElementById('${wrapperId}').dataset.aiRep=this.value;document.getElementById('${wrapperId}').dataset.aiPage=0;renderAllInvoices('${role}','${wrapperId}')"
+        style="padding:9px 12px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:13px;font-family:inherit;background:var(--s2);color:var(--t);outline:none">
+        <option value="all"${filterRep==='all'?' selected':''}>All Sales Reps</option>
+        ${Object.entries(repNames).map(([k,n])=>`<option value="${k}"${filterRep===k?' selected':''}>${n}</option>`).join('')}
+        <option value=""${filterRep===''?' selected':''}>Direct (no rep)</option>
+      </select>`:''}
+    </div>
+
+    <!-- Table header -->
+    <div style="display:grid;grid-template-columns:90px 1fr 1fr${showRepFilter?' 90px':''} 100px 80px;gap:0;background:var(--s2);padding:8px 18px;font-size:10px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;border-bottom:0.5px solid var(--b)">
+      <span>Date</span><span>Invoice #</span><span>Customer</span>${showRepFilter?'<span>Sales Rep</span>':''}<span style="text-align:right">Total</span><span style="text-align:center">Action</span>
     </div>`;
-  }).join('');
+
+  if(!slice.length){
+    html+='<div style="text-align:center;padding:40px;color:var(--t3);font-size:13px">No invoices match your filters.</div>';
+  } else {
+    slice.forEach((inv,ri)=>{
+      const oit=Array.isArray(inv.items)?inv.items:(inv.items?JSON.parse(inv.items):[]);
+      const isPaid=inv.status==='paid';
+      const expId=wrapperId+'-exp-'+ri;
+      html+=`<div style="border-bottom:0.5px solid var(--b)">
+        <div onclick="toggleAIRow('${expId}')" style="display:grid;grid-template-columns:90px 1fr 1fr${showRepFilter?' 90px':''} 100px 80px;gap:0;padding:11px 18px;cursor:pointer;align-items:center;transition:background .15s" onmouseover="this.style.background='var(--s2)'" onmouseout="this.style.background=''">
+          <span style="font-size:12px;color:var(--t3)">${inv.date||'—'}</span>
+          <span style="font-size:13px;font-weight:800;color:var(--teal)">${inv.id}</span>
+          <span style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${inv.custName||'—'}</span>
+          ${showRepFilter?`<span style="font-size:11px;color:var(--t2)">${inv.repName||'Direct'}</span>`:''}
+          <span style="font-size:13px;font-weight:700;color:var(--blue);text-align:right">LKR ${(inv.total||0).toLocaleString()}</span>
+          <span style="text-align:center">
+            <span style="font-size:10px;padding:2px 7px;border-radius:20px;background:${isPaid?'var(--green-bg)':'var(--amber-bg)'};color:${isPaid?'var(--green)':'var(--amber)'};font-weight:600">${isPaid?'Paid':'Unpaid'}</span>
+          </span>
+        </div>
+        <div id="${expId}" style="display:none;padding:0 18px 14px;background:var(--s2)">
+          <div style="background:var(--s);border-radius:var(--rs);padding:8px 12px;margin-bottom:10px">
+            ${oit.map(it=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:0.5px solid var(--b);font-size:12px">
+              <span style="color:var(--t2)">• ${it.name} <strong>× ${it.qty}</strong></span>
+              <span style="font-weight:600">LKR ${(it.sub||it.total||0).toLocaleString()}</span>
+            </div>`).join('')}
+            <div style="display:flex;justify-content:space-between;padding:5px 0 1px;font-weight:700;font-size:13px"><span>Total</span><span style="color:var(--teal)">LKR ${(inv.total||0).toLocaleString()}</span></div>
+          </div>
+          ${inv.note?`<div style="font-size:12px;color:var(--t2);margin-bottom:8px">📝 ${inv.note}</div>`:''}
+          <button data-iid="${inv.id}" onclick="event.stopPropagation();printInvoice(this.dataset.iid)"
+            style="padding:9px 22px;background:var(--teal);color:#fff;border:none;border-radius:var(--rs);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">🖨️ Print Invoice</button>
+        </div>
+      </div>`;
+    });
+  }
+
+  // Pagination
+  const from=total?page*PER_PAGE+1:0, to=Math.min((page+1)*PER_PAGE,total);
+  html+=`<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;font-size:12px;color:var(--t2)">
+    <span>${total?from+'–'+to+' of '+total+' invoice'+(total!==1?'s':''):'No results'}</span>
+    <div style="display:flex;gap:6px">
+      <button onclick="document.getElementById('${wrapperId}').dataset.aiPage=${Math.max(0,page-1)};renderAllInvoices('${role}','${wrapperId}')"
+        style="padding:6px 14px;border:0.5px solid var(--b2);border-radius:var(--rs);background:var(--s);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--t)"
+        ${page===0?'disabled style="padding:6px 14px;border:0.5px solid var(--b2);border-radius:var(--rs);background:var(--s);font-size:12px;font-weight:600;cursor:not-allowed;opacity:.4;font-family:inherit;color:var(--t)"':''}>← Prev</button>
+      <span style="padding:6px 10px;font-weight:600;color:var(--t)">Page ${page+1} / ${pages}</span>
+      <button onclick="document.getElementById('${wrapperId}').dataset.aiPage=${Math.min(pages-1,page+1)};renderAllInvoices('${role}','${wrapperId}')"
+        style="padding:6px 14px;border:0.5px solid var(--b2);border-radius:var(--rs);background:var(--s);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--t)"
+        ${page>=pages-1?'disabled style="padding:6px 14px;border:0.5px solid var(--b2);border-radius:var(--rs);background:var(--s);font-size:12px;font-weight:600;cursor:not-allowed;opacity:.4;font-family:inherit;color:var(--t)"':''}>Next →</button>
+    </div>
+  </div></div>`;
+
+  wrap.innerHTML=html;
+  // Re-focus search box if it had focus
+  const si=document.getElementById(wrapperId+'-search');
+  if(si&&document.activeElement===document.body){}// don't steal focus
+}
+
+function toggleAIRow(id){
+  const el=document.getElementById(id);if(!el)return;
+  el.style.display=el.style.display==='block'?'none':'block';
 }
 
 // ══════════════════════ IMPORT CENTRE ══════════════════════
