@@ -4291,7 +4291,7 @@ function goto(id,el){
   if(id==='p-w-returns')renderWhReturns();
   if(id==='p-a-payments')renderPaymentRegister();
   if(id==='p-w-payments')renderPaymentPage('wh');
-  if(id==='p-w-invoice')renderInvoiceRegister();
+  if(id==='p-w-invoice'){loadInvoicesFromDB().then(()=>renderInvoiceRegister());}
   updateMobTitle(id);
 }
 
@@ -6735,6 +6735,7 @@ function confirmProcessInvoice(){
   piCurrentOrder.status='Dispatched';
   piCurrentOrder.dispatchedAt=now.toLocaleString('en-GB',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
   dbUpdate('orders',{status:'Dispatched',dispatched_at:piCurrentOrder.dispatchedAt},{id:piCurrentOrder.id});
+  saveInvoiceToDB(inv);
   closeProcessInvoice();
   renderWarehouseQueue();
   renderWQueue();
