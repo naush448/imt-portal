@@ -4277,6 +4277,7 @@ function goto(id,el){
   if(id==='p-d-catalog')renderDistCatalog('',dCatF);
   if(id==='p-d-order'){renderDistQL('');renderDistCart();}
   if(id==='p-d-history')renderDistHistory();
+  if(id==='p-a-dash'){loadOrdersFromDB().then(()=>renderPendingOrders());}
   if(id==='p-w-queue'){loadOrdersFromDB().then(()=>renderWQueue());}
   if(id==='p-w-history'){loadOrdersFromDB().then(()=>renderWHistory());}
   // legacy non-refresh path removed — handled above
@@ -4524,6 +4525,7 @@ function renderWarehouseQueue(){
     const channelBadge=isDist
       ?'<span class="badge bg" style="font-size:10px">Distributor</span>'
       :'<span class="badge bt" style="font-size:10px">Sales Rep</span>';
+    const oit=Array.isArray(o.items)?o.items:(o.items?JSON.parse(o.items):[]);
     return `<div style="padding:13px 18px;border-bottom:0.5px solid var(--b);display:flex;align-items:flex-start;gap:14px">
       <div style="flex:1">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
@@ -4533,7 +4535,7 @@ function renderWarehouseQueue(){
         </div>
         <div style="font-size:12px;color:var(--t2);margin-bottom:7px">📦 <strong>${who}</strong></div>
         <div style="background:var(--s2);border-radius:var(--rs);padding:7px 10px;font-size:12px">
-          ${o.items.map(i=>`<div style="display:flex;justify-content:space-between;padding:2px 0"><span style="color:var(--t2)">• ${i.name} <strong>× ${i.qty}</strong></span><span style="font-weight:600">${fmt(i.sub)}</span></div>`).join('')}
+          ${oit.map(i=>`<div style="display:flex;justify-content:space-between;padding:2px 0"><span style="color:var(--t2)">• ${i.name} <strong>× ${i.qty}</strong></span><span style="font-weight:600">${fmt(i.sub)}</span></div>`).join('')}
           <div style="display:flex;justify-content:space-between;padding-top:5px;margin-top:3px;border-top:0.5px solid var(--b);font-weight:700"><span>Total</span><span style="color:var(--green)">${fmt(o.total)}</span></div>
         </div>
         ${o.note?`<div style="font-size:11px;color:var(--t3);margin-top:5px">📝 ${o.note}</div>`:''}
