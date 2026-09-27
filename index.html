@@ -1811,6 +1811,21 @@ tr:hover td{background:var(--s2)}
     </div>
   </div>
 
+  <!-- Rep: My Invoices page -->
+  <div class="page" id="p-r-invoices">
+    <div class="card">
+      <div class="ch">
+        <div>
+          <h3>🧾 My Invoices</h3>
+          <div style="font-size:11px;color:var(--t3);font-weight:400;margin-top:2px">Invoices generated from your approved orders</div>
+        </div>
+      </div>
+      <div id="rInvoiceList" style="padding:4px 0">
+        <div style="text-align:center;color:var(--t3);padding:32px;font-size:13px">Loading invoices…</div>
+      </div>
+    </div>
+  </div>
+
   <div class="page" id="p-a-access">
     <div style="font-size:13px;color:var(--t2);margin-bottom:18px">Control what each role can see and do. Changes take effect immediately — no need to reload.</div>
 
@@ -4272,7 +4287,7 @@ function buildSidebar(r){
     const cbCount=SLOW_STOCK.filter(p=>p.cashback&&p.cashbackRepKeys.includes(repKey)).length;
     nav.innerHTML=`<div class="sb-sec">My Performance</div>${n('p-r-dash',IC.grid,'My Dashboard')}${n('p-r-customers',IC.users,'My Customers')}
     <div class="sb-sec">Sales Tools</div>${n('p-r-cashback',IC.bell,'Cashback Offers <span class="nb" style="background:var(--teal-bg);color:var(--teal)">${cbCount}</span>')}${n('p-r-order',IC.cart,'Place Order')}
-    <div class="sb-sec">History</div>${n('p-r-myorders',IC.file,'My Orders')}${n('p-r-returns',IC.file,'My Returns')}`;
+    <div class="sb-sec">History</div>${n('p-r-myorders',IC.file,'My Orders')}${n('p-r-invoices',IC.file,'My Invoices')}${n('p-r-returns',IC.file,'My Returns')}`;
   }
   setTimeout(()=>{const f=nav.querySelector('.ni');if(f)f.classList.add('on');},10);
   buildMobileNav(r);
@@ -4317,6 +4332,7 @@ function goto(id,el){
   if(id==='p-a-payments')renderPaymentRegister();
   if(id==='p-w-payments')renderPaymentPage('wh');
   if(id==='p-w-invoice'){loadInvoicesFromDB().then(()=>renderInvoiceRegister());}
+  if(id==='p-r-invoices'){loadInvoicesFromDB().then(()=>renderRepInvoices());}
   updateMobTitle(id);
 }
 
@@ -5406,6 +5422,45 @@ function renderRepMyOrders(){
   tb.innerHTML=!mine.length?'<tr><td colspan="7" style="text-align:center;color:var(--t3);padding:16px">No orders yet.</td></tr>':mine.map(o=>{
     const autoTag=o.autoApproved?'<span class="badge bt" style="font-size:10px">⚡ Auto</span>':'<span style="font-size:11px;color:var(--t3)">Manual</span>';
     return `<tr><td><strong>${o.id}</strong></td><td>${o.custName}</td><td>${o.date}</td><td style="font-size:12px;max-width:160px">${o.items.map(i=>i.name+' ×'+i.qty).join(', ')}</td><td style="font-weight:600">${fmt(o.total)}</td><td>${autoTag}</td><td><span class="badge ${bc[o.status]}">${o.status}</span></td></tr>`;
+  }).join('');
+}
+
+function renderRepInvoices(){
+  const el=document.getElementById('rInvoiceList');if(!el)return;
+  const rk=repKey||'';
+  const mine=INVOICES.filter(inv=>inv.repKey===rk);
+  if(!mine.length){
+    el.innerHTML='<div style="text-align:center;color:var(--t3);padding:32px;font-size:13px">No invoices yet. Invoices appear here once your approved orders are processed by the warehouse.</div>';
+    return;
+  }
+  el.innerHTML=mine.map(inv=>{
+    const oit=Array.isArray(inv.items)?inv.items:(inv.items?JSON.parse(inv.items):[]);
+    return `<div style="border-bottom:0.5px solid var(--b);padding:14px 18px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
+            <span style="font-size:14px;font-weight:700">${inv.id}</span>
+            <span style="font-size:11px;background:var(--teal-bg);color:var(--teal);padding:2px 9px;border-radius:20px;font-weight:600">🚚 Dispatched</span>
+          </div>
+          <div style="font-size:13px;font-weight:600">${inv.custName||'—'}</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:2px">Order: ${inv.orderId||'—'} · Date: ${inv.date||'—'}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:18px;font-weight:700;color:var(--blue)">${fmt(inv.total)}</div>
+          <button onclick="printInvoice('${inv.id}')" style="margin-top:6px;padding:5px 12px;background:var(--teal);color:#fff;border:none;border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🖨 Print</button>
+        </div>
+      </div>
+      <div style="background:var(--s2);border-radius:var(--rs);padding:8px 12px">
+        ${oit.map(i=>`<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px;border-bottom:0.5px solid var(--b)">
+          <span style="color:var(--t2)">• ${i.name} <strong>× ${i.qty}</strong></span>
+          <span style="font-weight:600">${fmt(i.sub)}</span>
+        </div>`).join('')}
+        <div style="display:flex;justify-content:space-between;padding:5px 0 1px;font-weight:700;font-size:13px">
+          <span>Total</span><span style="color:var(--blue)">${fmt(inv.total)}</span>
+        </div>
+      </div>
+      ${inv.note?`<div style="margin-top:6px;font-size:12px;color:var(--t2)">📝 ${inv.note}</div>`:''}
+    </div>`;
   }).join('');
 }
 
@@ -6699,8 +6754,9 @@ function openProcessInvoice(orderId, arrName){
 function closeProcessInvoice(){document.getElementById('processInvoiceModal').style.display='none';}
 
 function openCancelOrder(){
+  if(!piCurrentOrder)return;
   const lbl=document.getElementById('cancelOrderLabel');
-  if(lbl)lbl.textContent=piOrderId||'';
+  if(lbl)lbl.textContent=piCurrentOrder.id||'';
   const ta=document.getElementById('cancelReasonText');
   if(ta)ta.value='';
   const err=document.getElementById('cancelReasonError');
@@ -6713,18 +6769,19 @@ async function confirmCancelOrder(){
   const err=document.getElementById('cancelReasonError');
   if(!reason){if(err)err.style.display='block';return;}
   if(err)err.style.display='none';
-  // Update order in memory
-  const arr=piArrName==='REP_ORDERS'?REP_ORDERS:DIST_ORDERS;
-  const o=arr.find(x=>x.id===piOrderId);
+  if(!piCurrentOrder)return;
   const cancelledAt=new Date().toLocaleString('en-GB',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-  if(o){o.status='Cancelled';o.cancel_reason=reason;o.cancelledAt=cancelledAt;}
+  piCurrentOrder.status='Cancelled';
+  piCurrentOrder.cancel_reason=reason;
+  piCurrentOrder.cancelledAt=cancelledAt;
+  const ordId=piCurrentOrder.id;
   // Save to Supabase
-  await dbUpdate('orders',{status:'Cancelled',cancel_reason:reason,cancelledAt:cancelledAt},{id:piOrderId});
+  await dbUpdate('orders',{status:'Cancelled',cancel_reason:reason,cancelledAt:cancelledAt},{id:ordId});
   closeCancelOrder();
   closeProcessInvoice();
   renderWQueue();
   renderWarehouseQueue();
-  alert('Order '+piOrderId+' has been cancelled.\nReason recorded: '+reason);
+  alert('Order '+ordId+' has been cancelled.\nReason recorded: '+reason);
 }
 
 function renderPiItems(){
