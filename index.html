@@ -3962,7 +3962,7 @@ let role=null, curDist=null, curRep=null, distKey=null, repKey=null;
 let dCatF='all', repCBFilter='all', ssF='all';
 let histCI=null, revCI=null;
 
-const today=new Date(2026,5,9);
+const today=new Date();
 // Current month helpers - auto-updates every month
 const MONTH_NAMES=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MONTH_SHORT=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -7042,7 +7042,7 @@ function printInvoice(invId){
       +'<button onclick="window.close()" style="padding:10px 20px;background:#6b7280;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">Close</button>'
     +'</div>'
     +'</body></html>';
-  const w=window.open('','_blank','width=820,height:900');
+  const w=window.open('','_blank','width=820,height=900');
   w.document.write(html);w.document.close();
 }
 
