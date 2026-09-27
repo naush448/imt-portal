@@ -507,7 +507,10 @@ tr:hover td{background:var(--s2)}
             <div style="font-size:11px;color:var(--t3);font-weight:400">Approved orders waiting to be packed and sent</div>
           </div>
         </div>
-        <span class="badge bg" id="warehouseBadge">0 ready</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="badge bg" id="warehouseBadge">0 ready</span>
+          <button onclick="loadOrdersFromDB().then(()=>{renderPendingOrders();renderWarehouseQueue();})" style="padding:4px 10px;background:none;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:11px;font-weight:600;cursor:pointer;color:var(--t3);font-family:inherit">↻ Refresh</button>
+        </div>
       </div>
       <div id="warehouseQueue" style="padding:4px 0">
         <div style="text-align:center;color:var(--t3);padding:20px;font-size:13px">No orders ready to dispatch.</div>
@@ -4277,7 +4280,6 @@ function goto(id,el){
   if(id==='p-d-catalog')renderDistCatalog('',dCatF);
   if(id==='p-d-order'){renderDistQL('');renderDistCart();}
   if(id==='p-d-history')renderDistHistory();
-  if(id==='p-a-dash'){loadOrdersFromDB().then(()=>renderPendingOrders());}
   if(id==='p-w-queue'){loadOrdersFromDB().then(()=>renderWQueue());}
   if(id==='p-w-history'){loadOrdersFromDB().then(()=>renderWHistory());}
   // legacy non-refresh path removed — handled above
