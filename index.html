@@ -4474,9 +4474,9 @@ function renderPendingOrders(){
             +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:5px 0 2px;font-weight:700"><span>Total</span><span style="color:var(--teal)">'+fmt(o.total)+'</span></div>'
           +'</div>'
           +'<div style="display:flex;gap:6px">'
-            +'<button class="btn btn-green" style="flex:1;padding:8px" onclick="approveOrd(REP_ORDERS,REP_ORDERS['+ri+'].id)">Approve</button>'
-            +'<button class="btn btn-red" style="flex:1;padding:8px" onclick="rejectOrd(REP_ORDERS,REP_ORDERS['+ri+'].id)">Reject</button>'
-            +'<button class="btn btn-outline btn-sm" style="padding:8px 10px" onclick="printOrder(REP_ORDERS,REP_ORDERS['+ri+'].id)">Print</button>'
+            +'<button class="btn btn-green" style="flex:1;padding:8px" onclick="approveOrd(REP_ORDERS,\''+o.id+'\')">Approve</button>'
+            +'<button class="btn btn-red" style="flex:1;padding:8px" onclick="rejectOrd(REP_ORDERS,\''+o.id+'\')">Reject</button>'
+            +'<button class="btn btn-outline btn-sm" style="padding:8px 10px" onclick="printOrder(REP_ORDERS,\''+o.id+'\')">Print</button>'
           +'</div>'
         +'</div>';
       }
