@@ -14,7 +14,6 @@
 <link rel="apple-touch-icon" id="pwa-icon">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
   --bg:#f4f3ef;--s:#fff;--s2:#f9f8f5;
@@ -49,6 +48,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .lc-btn:hover{opacity:.9}
 .lc-err{font-size:12px;color:var(--red);margin-top:8px;text-align:center;display:none}
 .lc-hint{font-size:11px;color:var(--t3);margin-top:12px;text-align:center;line-height:1.8}
+
+/* TOAST */
+#toast-container{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+.toast{padding:11px 20px;border-radius:10px;font-size:13px;font-weight:500;color:#fff;max-width:360px;text-align:center;animation:toastIn .2s ease;box-shadow:0 4px 16px rgba(0,0,0,.18);pointer-events:auto}
+.toast.success{background:var(--green)}
+.toast.error{background:var(--red)}
+.toast.info{background:var(--blue)}
+.toast.warning{background:var(--amber)}
+@keyframes toastIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 
 /* APP */
 #app{display:none;min-height:100vh}
@@ -260,6 +268,7 @@ tr:hover td{background:var(--s2)}
 </style>
 </head>
 <body>
+<div id="toast-container"></div>
 
 <!-- LOGIN -->
   <!-- Bulk Import Modal -->
@@ -2738,6 +2747,21 @@ Please log in to the portal to approve or reject.</div>
 </div>
 
 <script>
+// ══════════════════════ UTILITIES ══════════════════════
+function showToast(msg,type='info',duration=3500){
+  const c=document.getElementById('toast-container');
+  if(!c)return;
+  const t=document.createElement('div');
+  t.className='toast '+type;
+  t.textContent=msg;
+  c.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),300);},duration);
+}
+function esc(s){
+  if(s==null)return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 // ══════════════════════ SUPABASE ══════════════════════
 const SUPA_URL='https://ahvxfjysmysgjtwyidje.supabase.co';
 const SUPA_KEY='sb_publishable_FyYtfHVMRFU8fZ9lZo-kPw_8C7z32U3';
@@ -4124,32 +4148,59 @@ function setRole(r,el){
   }
   role=r;
 }
+// Login rate limiting — per-session, resets on page reload
+const _loginAttempts={};
+function _checkRateLimit(key){
+  const now=Date.now();
+  if(!_loginAttempts[key])_loginAttempts[key]={count:0,lockedUntil:0};
+  const rec=_loginAttempts[key];
+  if(rec.lockedUntil>now){
+    const secs=Math.ceil((rec.lockedUntil-now)/1000);
+    return `Too many failed attempts. Try again in ${secs}s.`;
+  }
+  return null;
+}
+function _recordFailedAttempt(key){
+  const rec=_loginAttempts[key];
+  rec.count++;
+  if(rec.count>=5){rec.lockedUntil=Date.now()+30000;rec.count=0;}
+}
+function _resetAttempts(key){delete _loginAttempts[key];}
+
 function doLogin(){
   const err=document.getElementById('lErr');err.style.display='none';
   if(!role||role==='admin'){
     const u=document.getElementById('aUser').value.trim();
     const p=document.getElementById('aPass').value;
-    if((u==='admin'||u==='usman')&&(p==='imt2026'||p==='admin')){launch('admin');}
-    else err.style.display='block';
+    const limited=_checkRateLimit('admin');
+    if(limited){err.textContent=limited;err.style.display='block';return;}
+    if((u==='admin'||u==='usman')&&p==='imt2026'){_resetAttempts('admin');launch('admin');}
+    else{_recordFailedAttempt('admin');err.textContent='Incorrect username or password.';err.style.display='block';}
   } else if(role==='dist'){
     const k=document.getElementById('distSel').value;
     const p=document.getElementById('dPin').value;
     if(!k){err.textContent='Select your account.';err.style.display='block';return;}
-    if(DISTS[k]&&DISTS[k].pin===p){distKey=k;curDist=DISTS[k];launch('dist');}
-    else{err.textContent='Incorrect PIN.';err.style.display='block';}
+    const limited=_checkRateLimit('dist_'+k);
+    if(limited){err.textContent=limited;err.style.display='block';return;}
+    if(DISTS[k]&&DISTS[k].pin===p){_resetAttempts('dist_'+k);distKey=k;curDist=DISTS[k];launch('dist');}
+    else{_recordFailedAttempt('dist_'+k);err.textContent='Incorrect PIN.';err.style.display='block';}
   } else if(role==='wh'){
     const k=document.getElementById('whSel').value;
     const p=document.getElementById('whPass').value;
     if(!k){err.textContent='Select your name.';err.style.display='block';return;}
+    const limited=_checkRateLimit('wh_'+k);
+    if(limited){err.textContent=limited;err.style.display='block';return;}
     const acc=WH_ACCOUNTS.find(a=>a.id===k);
-    if(acc&&acc.pass===p){curWH=acc;launch('wh');}
-    else{err.textContent='Incorrect password.';err.style.display='block';}
+    if(acc&&acc.pass===p){_resetAttempts('wh_'+k);curWH=acc;launch('wh');}
+    else{_recordFailedAttempt('wh_'+k);err.textContent='Incorrect password.';err.style.display='block';}
   } else {
     const k=document.getElementById('repSel').value;
     const p=document.getElementById('rPin').value;
     if(!k){err.textContent='Select your name.';err.style.display='block';return;}
-    if(REPS[k]&&REPS[k].pin===p){repKey=k;curRep=REPS[k];launch('rep');}
-    else{err.textContent='Incorrect PIN.';err.style.display='block';}
+    const limited=_checkRateLimit('rep_'+k);
+    if(limited){err.textContent=limited;err.style.display='block';return;}
+    if(REPS[k]&&REPS[k].pin===p){_resetAttempts('rep_'+k);repKey=k;curRep=REPS[k];launch('rep');}
+    else{_recordFailedAttempt('rep_'+k);err.textContent='Incorrect PIN.';err.style.display='block';}
   }
 }
 ['aPass','dPin','rPin','whPass'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});});
@@ -4468,7 +4519,7 @@ function renderPendingOrders(){
                 <span class="badge ba" style="font-size:10px">Pending</span>
               </div>
               <div style="font-size:12px;color:var(--t2)">🏪 ${o.dist} · 📅 ${o.date}</div>
-              ${o.note?`<div style="font-size:11px;color:var(--t3);margin-top:3px">📝 ${o.note}</div>`:''}
+              ${o.note?`<div style="font-size:11px;color:var(--t3);margin-top:3px">📝 ${esc(o.note)}</div>`:''}
             </div>
             <div style="text-align:right;flex-shrink:0">
               <div style="font-size:16px;font-weight:700;color:var(--blue)">${fmt(o.total)}</div>
@@ -4535,18 +4586,21 @@ function approveOrd(arr,id){
   if(o){o.status='Approved';o.approvedAt=new Date().toLocaleString('en-GB',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
   dbUpdate('orders',{status:'Approved',approved_at:o?o.approvedAt:null},{id});
   renderPendingOrders();renderDistOrders();renderRepOrders();
+  showToast('Order '+id+' approved ✓','success');
 }
 function rejectOrd(arr,id){
   const o=arr.find(x=>x.id===id);
   if(o)o.status='Rejected';
   dbUpdate('orders',{status:'Rejected'},{id});
   renderPendingOrders();renderDistOrders();renderRepOrders();
+  showToast('Order '+id+' rejected','info');
 }
 function dispatchOrd(arr,id){
   const o=arr.find(x=>x.id===id);
   if(o){o.status='Dispatched';o.dispatchedAt=new Date().toLocaleString('en-GB',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
   dbUpdate('orders',{status:'Dispatched',dispatched_at:o?o.dispatchedAt:null},{id});
   renderPendingOrders();renderDistOrders();renderRepOrders();
+  showToast('Order '+id+' dispatched ✓','success');
 }
 
 function renderWarehouseQueue(){
@@ -4582,7 +4636,7 @@ function renderWarehouseQueue(){
           ${oit.map(i=>`<div style="display:flex;justify-content:space-between;padding:2px 0"><span style="color:var(--t2)">• ${i.name} <strong>× ${i.qty}</strong></span><span style="font-weight:600">${fmt(i.sub)}</span></div>`).join('')}
           <div style="display:flex;justify-content:space-between;padding-top:5px;margin-top:3px;border-top:0.5px solid var(--b);font-weight:700"><span>Total</span><span style="color:var(--green)">${fmt(o.total)}</span></div>
         </div>
-        ${o.note?`<div style="font-size:11px;color:var(--t3);margin-top:5px">📝 ${o.note}</div>`:''}
+        ${o.note?`<div style="font-size:11px;color:var(--t3);margin-top:5px">📝 ${esc(o.note)}</div>`:''}
       </div>
       <div style="flex-shrink:0">
         <div style="display:flex;flex-direction:column;gap:6px">
@@ -4696,7 +4750,7 @@ function addDistDiscount(){
   const pid=parseInt(document.getElementById('ddProduct').value);
   const pct=parseFloat(document.getElementById('ddPct').value);
   const days=parseInt(document.getElementById('ddDays').value);
-  if(!dk||!pid||!pct||!days){alert('Please fill all fields.');return;}
+  if(!dk||!pid||!pct||!days){showToast('Please fill all fields.','warning');return;}
   const prod=PRODUCTS.find(p=>p.id===pid);
   DIST_DISCOUNTS.push({id:'DD-'+Date.now(),distKey:dk,productId:pid,productName:prod.name,pct,daysLeft:days,note:''});
   document.getElementById('ddPct').value='';
@@ -4857,7 +4911,7 @@ function submitDistOrder(){
   const ids=Object.keys(dCart).filter(id=>dCart[id]>0);if(!ids.length)return;
   const items=ids.map(id=>{const p=PRODUCTS.find(x=>x.id==id);const disc=getDistDiscount(distKey,p.id);const pr=disc?Math.round(distPrice(p)*(1-disc.pct/100)):distPrice(p);return{name:p.name,qty:dCart[id],price:pr,sub:pr*dCart[id]};});
   const total=items.reduce((a,b)=>a+b.sub,0);
-  const order={id:'DO-'+String(Date.now()).slice(-5),date:today.toLocaleDateString('en-GB'),dist:curDist.name,distKey,items,total,note:document.getElementById('dOrdNote').value,status:'Pending'};
+  const order={id:'DO-'+String(Date.now()).slice(-5)+Math.random().toString(36).slice(-2),date:today.toLocaleDateString('en-GB'),dist:curDist.name,distKey,items,total,note:document.getElementById('dOrdNote').value,status:'Pending'};
   DIST_ORDERS.unshift(order);
   curDist.juneS+=total;dCart={};
   document.getElementById('dOrdNote').value='';
@@ -5372,7 +5426,7 @@ async function submitRepOrder(){
   const status=autoApproved?'Approved':'Pending';
   const now=new Date();
   const order={
-    id:'RO-'+String(Date.now()).slice(-6),
+    id:'RO-'+String(Date.now()).slice(-6)+Math.random().toString(36).slice(-2),
     date:today.toLocaleDateString('en-GB'),
     repKey,repName:curRep.name,
     custKey:custK,custName:cust.name,
@@ -5996,7 +6050,7 @@ function renderWQueue(){
               <span style="font-size:14px;font-weight:700;color:var(--blue)">${fmt(o.total)}</span>
             </div>
           </div>
-          ${o.note?`<div style="margin-top:8px;font-size:12px;color:var(--t2);padding:7px 12px;background:var(--amber-bg);border-radius:var(--rs)">📝 Note: ${o.note}</div>`:''}
+          ${o.note?`<div style="margin-top:8px;font-size:12px;color:var(--t2);padding:7px 12px;background:var(--amber-bg);border-radius:var(--rs)">📝 Note: ${esc(o.note)}</div>`:''}
         </div>
         <div style="flex-shrink:0;display:flex;flex-direction:column;gap:8px">
           <button onclick="openProcessInvoice('${o.id}','${arr}')"
@@ -6066,7 +6120,7 @@ function renderWHistory(){
           <div style="font-size:11px;color:var(--t3)">${oit.length} product${oit.length!==1?'s':''}</div>
         </div>
       </div>
-      ${isCancelled&&o.cancel_reason?`<div style="background:#fff0f0;border-radius:var(--rs);padding:8px 12px;margin-bottom:8px;font-size:12px;color:var(--red,#e53e3e)"><strong>Cancellation reason:</strong> ${o.cancel_reason}</div>`:''}
+      ${isCancelled&&o.cancel_reason?`<div style="background:#fff0f0;border-radius:var(--rs);padding:8px 12px;margin-bottom:8px;font-size:12px;color:var(--red,#e53e3e)"><strong>Cancellation reason:</strong> ${esc(o.cancel_reason)}</div>`:''}
       <div style="background:var(--s2);border-radius:var(--rs);padding:8px 12px">
         ${oit.map(i=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:0.5px solid var(--b);font-size:12px">
           <span style="color:var(--t2)">• ${i.name} <strong>× ${i.qty}</strong></span>
@@ -6076,7 +6130,7 @@ function renderWHistory(){
           <span>Order total</span><span style="color:${isCancelled?'var(--t3)':'var(--blue)'}">${fmt(o.total)}</span>
         </div>
       </div>
-      ${o.note?`<div style="margin-top:7px;font-size:12px;color:var(--t2)">📝 ${o.note}</div>`:''}
+      ${o.note?`<div style="margin-top:7px;font-size:12px;color:var(--t2)">📝 ${esc(o.note)}</div>`:''}
     </div>`;
   }).join('');
 }
@@ -6404,7 +6458,7 @@ function checkInNewProspect(){
   const note=document.getElementById('prospectNote').value.trim();
   const msg=document.getElementById('prospectMsg');
   if(!name){msg.textContent='Please enter the store name.';msg.style.display='block';return;}
-  if(!navigator.geolocation){alert('GPS not available on this device.');return;}
+  if(!navigator.geolocation){showToast('GPS not available on this device.','error');return;}
   const btn=document.getElementById('prospectSubmitBtn');
   btn.textContent='📡 Getting GPS...';btn.disabled=true;
   navigator.geolocation.getCurrentPosition(pos=>{
@@ -6721,7 +6775,7 @@ async function confirmPayment(){
   const now=new Date();
   const chequeClearDate=document.getElementById('payChequeClearDate')?.value||'';
   const payment={
-    id:'PAY-'+String(Date.now()).slice(-6),
+    id:'PAY-'+String(Date.now()).slice(-6)+Math.random().toString(36).slice(-2),
     custKey,custName:cust.name,
     amount,method,ref,
     date:date||now.toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'}),
@@ -6881,7 +6935,7 @@ async function confirmCancelOrder(){
   closeProcessInvoice();
   renderWQueue();
   renderWarehouseQueue();
-  alert('Order '+ordId+' has been cancelled.\nReason recorded: '+reason);
+  showToast('Order '+ordId+' cancelled. Reason recorded.','success');
 }
 
 function renderPiItems(){
@@ -6925,7 +6979,7 @@ function updatePiTotal(){
 function confirmProcessInvoice(){
   if(!piCurrentOrder)return;
   const activeItems=piItems.filter(it=>it.active&&it.qty>0);
-  if(!activeItems.length){alert('At least one item must be included.');return;}
+  if(!activeItems.length){showToast('At least one item must be included.','warning');return;}
   const total=activeItems.reduce((s,it)=>s+(it.price||0)*it.qty,0);
   const isRep=!!piCurrentOrder.repName;
   const custKey=piCurrentOrder.custKey||null;
@@ -6956,6 +7010,7 @@ function confirmProcessInvoice(){
   closeProcessInvoice();
   renderWarehouseQueue();
   renderWQueue();
+  showToast('Invoice '+inv.id+' created ✓','success');
   printInvoice(inv.id);
 }
 
@@ -7533,7 +7588,7 @@ function whApproveCredit(id){
 
 // ══════════════════════ VISIT TRACKER ══════════════════════
 function checkInVisit(custKey,custName){
-  if(!navigator.geolocation){alert('GPS not available on this device.');return;}
+  if(!navigator.geolocation){showToast('GPS not available on this device.','error');return;}
   const btns=document.querySelectorAll('[data-checkin="'+custKey+'"]');
   btns.forEach(b=>{b.textContent='📡 Getting GPS...';b.disabled=true;});
   navigator.geolocation.getCurrentPosition(pos=>{
@@ -7561,7 +7616,7 @@ function checkInVisit(custKey,custName){
     btns.forEach(b=>{b.textContent='📍 Check In';b.disabled=false;});
     const msg=err.code===1?'Location access denied. Allow location in your browser settings.':
               err.code===2?'Could not get location. Try again.':'Location timed out. Try again.';
-    alert(msg);
+    showToast(msg,'error',5000);
   },{enableHighAccuracy:true,timeout:15000,maximumAge:0});
 }
 
@@ -8098,8 +8153,8 @@ function handleOfferFileSelect(input){
   if(file)uploadOfferImage(file);
 }
 async function uploadOfferImage(file){
-  if(!sb){alert('Not connected to database.');return;}
-  if(file.size>5*1024*1024){alert('Image must be under 5MB.');return;}
+  if(!sb){showToast('Not connected to database.','error');return;}
+  if(file.size>5*1024*1024){showToast('Image must be under 5MB.','warning');return;}
   const progress=document.getElementById('offerUploadProgress');
   const bar=document.getElementById('offerUploadBar');
   const msg=document.getElementById('offerUploadMsg');
@@ -8130,7 +8185,7 @@ async function uploadOfferImage(file){
   }catch(err){
     if(progress)progress.style.display='none';
     if(area)area.style.display='block';
-    alert('Upload failed: '+(err.message||'Unknown error'));
+    showToast('Upload failed: '+(err.message||'Unknown error'),'error');
     console.error('Upload error:',err);
   }
 }
