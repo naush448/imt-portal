@@ -2557,7 +2557,30 @@ Please log in to the portal to approve or reject.</div>
           <label style="font-size:11px;font-weight:600;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">Note (optional)</label>
           <textarea id="piNote" rows="2" placeholder="e.g. Partial delivery — 5 items out of stock..." style="width:100%;padding:10px 12px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:13px;font-family:inherit;resize:none;background:var(--s2);color:var(--t);outline:none"></textarea>
         </div>
-        <button onclick="confirmProcessInvoice()" style="width:100%;padding:14px;background:var(--teal);color:#fff;border:none;border-radius:var(--rs);font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">Generate Invoice & Mark Dispatched</button>
+        <button onclick="confirmProcessInvoice()" style="width:100%;padding:14px;background:var(--teal);color:#fff;border:none;border-radius:var(--rs);font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">🧾 Generate Invoice & Mark Dispatched</button>
+        <div style="margin-top:10px;padding-top:10px;border-top:0.5px solid var(--b2);text-align:center">
+          <button onclick="openCancelOrder()" style="background:none;border:1.5px solid var(--red,#e53e3e);color:var(--red,#e53e3e);border-radius:var(--rs);padding:10px 28px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">❌ Cancel Order</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cancel Order Modal -->
+  <div id="cancelOrderModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:10000;align-items:center;justify-content:center">
+    <div style="background:var(--s);border-radius:16px;width:90%;max-width:420px;padding:28px 24px;box-shadow:0 8px 40px rgba(0,0,0,.25)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+        <span style="font-size:24px">❌</span>
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--t)">Cancel Order</div>
+          <div id="cancelOrderLabel" style="font-size:12px;color:var(--t3);margin-top:2px"></div>
+        </div>
+      </div>
+      <label style="font-size:11px;font-weight:700;color:var(--t2);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Reason for Cancellation <span style="color:var(--red,#e53e3e)">*</span></label>
+      <textarea id="cancelReasonText" rows="4" placeholder="e.g. Customer requested cancellation, item out of stock, pricing dispute..." style="width:100%;padding:10px 12px;border:1.5px solid var(--b2);border-radius:var(--rs);font-size:13px;font-family:inherit;resize:none;background:var(--s2);color:var(--t);outline:none;box-sizing:border-box"></textarea>
+      <div id="cancelReasonError" style="display:none;color:var(--red,#e53e3e);font-size:12px;margin-top:5px;font-weight:600">⚠ Please enter a cancellation reason before proceeding.</div>
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button onclick="closeCancelOrder()" style="flex:1;padding:12px;background:none;border:1px solid var(--b2);border-radius:var(--rs);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;color:var(--t2)">Back</button>
+        <button onclick="confirmCancelOrder()" style="flex:1;padding:12px;background:var(--red,#e53e3e);color:#fff;border:none;border-radius:var(--rs);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">Confirm Cancellation</button>
       </div>
     </div>
   </div>
@@ -5771,8 +5794,8 @@ function getAllApproved(){
 }
 function getAllDispatched(){
   return [
-    ...DIST_ORDERS.filter(o=>o.status==='Dispatched').map(o=>({...o,channel:'dist',who:o.dist})),
-    ...REP_ORDERS.filter(o=>o.status==='Dispatched').map(o=>({...o,channel:'rep',who:o.repName+' → '+o.custName}))
+    ...DIST_ORDERS.filter(o=>o.status==='Dispatched'||o.status==='Cancelled').map(o=>({...o,channel:'dist',who:o.dist})),
+    ...REP_ORDERS.filter(o=>o.status==='Dispatched'||o.status==='Cancelled').map(o=>({...o,channel:'rep',who:o.repName+' → '+o.custName}))
   ];
 }
 
@@ -5825,11 +5848,7 @@ function renderWQueue(){
             style="padding:12px 20px;background:var(--teal);color:#fff;border:none;border-radius:var(--rs);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;display:block">
             🧾 Process & Invoice
           </button>
-          <button onclick="whDispatch('${arr}','${o.id}')"
-            style="padding:10px 20px;background:none;color:var(--green);border:1.5px solid var(--green);border-radius:var(--rs);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;display:block">
-            🚚 Dispatch only
-          </button>
-          <div style="font-size:10px;color:var(--t3);text-align:center">Process = invoice + dispatch</div>
+          <div style="font-size:10px;color:var(--t3);text-align:center">Process = edit items + invoice + dispatch</div>
         </div>
       </div>
     </div>`;
@@ -5869,31 +5888,37 @@ function renderWHistory(){
     return;
   }
   el.innerHTML=all.map(o=>{
+    const isCancelled=o.status==='Cancelled';
     const chanCol=o.channel==='dist'?'var(--green)':'var(--teal)';
     const chanLabel=o.channel==='dist'?'Distributor':'Sales Rep';
-    return `<div style="background:var(--s);border:0.5px solid var(--b);border-left:3px solid ${chanCol};border-radius:var(--r);padding:14px 18px;margin-bottom:10px;opacity:.92">
+    const borderCol=isCancelled?'var(--red,#e53e3e)':chanCol;
+    const oit=Array.isArray(o.items)?o.items:(o.items?JSON.parse(o.items):[]);
+    return `<div style="background:var(--s);border:0.5px solid var(--b);border-left:3px solid ${borderCol};border-radius:var(--r);padding:14px 18px;margin-bottom:10px;opacity:${isCancelled?.85:.92}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px">
         <div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
             <span style="font-size:14px;font-weight:700">${o.id}</span>
             <span style="font-size:11px;padding:2px 9px;border-radius:20px;background:${o.channel==='dist'?'var(--green-bg)':'var(--teal-bg)'};color:${chanCol};font-weight:600">${chanLabel}</span>
-            <span style="font-size:11px;background:var(--purple-bg);color:var(--purple);padding:2px 9px;border-radius:20px;font-weight:500">🚚 Dispatched</span>
+            ${isCancelled
+              ?'<span style="font-size:11px;background:#fff0f0;color:var(--red,#e53e3e);padding:2px 9px;border-radius:20px;font-weight:600">❌ Cancelled</span>'
+              :'<span style="font-size:11px;background:var(--purple-bg);color:var(--purple);padding:2px 9px;border-radius:20px;font-weight:500">🚚 Dispatched</span>'}
           </div>
           <div style="font-size:13px;font-weight:600;margin-bottom:2px">${o.who}</div>
-          <div style="font-size:11px;color:var(--t3)">Ordered: ${o.date}  ·  Dispatched: <strong style="color:var(--green)">${o.dispatchedAt||'—'}</strong></div>
+          <div style="font-size:11px;color:var(--t3)">Ordered: ${o.date}  ·  ${isCancelled?'Cancelled':'Dispatched'}: <strong style="color:${isCancelled?'var(--red,#e53e3e)':'var(--green)'}">${(isCancelled?o.cancelledAt:o.dispatchedAt)||'—'}</strong></div>
         </div>
         <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:18px;font-weight:700;color:var(--blue)">${fmt(o.total)}</div>
-          <div style="font-size:11px;color:var(--t3)">${o.items.length} product${o.items.length!==1?'s':''}</div>
+          <div style="font-size:18px;font-weight:700;color:${isCancelled?'var(--t3)':'var(--blue)'};${isCancelled?'text-decoration:line-through':''}">${fmt(o.total)}</div>
+          <div style="font-size:11px;color:var(--t3)">${oit.length} product${oit.length!==1?'s':''}</div>
         </div>
       </div>
+      ${isCancelled&&o.cancel_reason?`<div style="background:#fff0f0;border-radius:var(--rs);padding:8px 12px;margin-bottom:8px;font-size:12px;color:var(--red,#e53e3e)"><strong>Cancellation reason:</strong> ${o.cancel_reason}</div>`:''}
       <div style="background:var(--s2);border-radius:var(--rs);padding:8px 12px">
-        ${o.items.map(i=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:0.5px solid var(--b);font-size:12px">
+        ${oit.map(i=>`<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:0.5px solid var(--b);font-size:12px">
           <span style="color:var(--t2)">• ${i.name} <strong>× ${i.qty}</strong></span>
           <span style="font-weight:600">${fmt(i.sub)}</span>
         </div>`).join('')}
         <div style="display:flex;justify-content:space-between;padding:6px 0 2px;font-weight:700;font-size:13px">
-          <span>Order total</span><span style="color:var(--blue)">${fmt(o.total)}</span>
+          <span>Order total</span><span style="color:${isCancelled?'var(--t3)':'var(--blue)'}">${fmt(o.total)}</span>
         </div>
       </div>
       ${o.note?`<div style="margin-top:7px;font-size:12px;color:var(--t2)">📝 ${o.note}</div>`:''}
@@ -6672,6 +6697,35 @@ function openProcessInvoice(orderId, arrName){
   document.getElementById('processInvoiceModal').style.display='flex';
 }
 function closeProcessInvoice(){document.getElementById('processInvoiceModal').style.display='none';}
+
+function openCancelOrder(){
+  const lbl=document.getElementById('cancelOrderLabel');
+  if(lbl)lbl.textContent=piOrderId||'';
+  const ta=document.getElementById('cancelReasonText');
+  if(ta)ta.value='';
+  const err=document.getElementById('cancelReasonError');
+  if(err)err.style.display='none';
+  document.getElementById('cancelOrderModal').style.display='flex';
+}
+function closeCancelOrder(){document.getElementById('cancelOrderModal').style.display='none';}
+async function confirmCancelOrder(){
+  const reason=(document.getElementById('cancelReasonText').value||'').trim();
+  const err=document.getElementById('cancelReasonError');
+  if(!reason){if(err)err.style.display='block';return;}
+  if(err)err.style.display='none';
+  // Update order in memory
+  const arr=piArrName==='REP_ORDERS'?REP_ORDERS:DIST_ORDERS;
+  const o=arr.find(x=>x.id===piOrderId);
+  const cancelledAt=new Date().toLocaleString('en-GB',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  if(o){o.status='Cancelled';o.cancel_reason=reason;o.cancelledAt=cancelledAt;}
+  // Save to Supabase
+  await dbUpdate('orders',{status:'Cancelled',cancel_reason:reason,cancelledAt:cancelledAt},{id:piOrderId});
+  closeCancelOrder();
+  closeProcessInvoice();
+  renderWQueue();
+  renderWarehouseQueue();
+  alert('Order '+piOrderId+' has been cancelled.\nReason recorded: '+reason);
+}
 
 function renderPiItems(){
   const el=document.getElementById('piItemsList');if(!el)return;
