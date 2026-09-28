@@ -8242,34 +8242,49 @@ async function saveOffer(){
   const msg=document.getElementById('offerMsg');
 
   if(!title){if(msg){msg.textContent='Title is required.';msg.style.color='var(--red)';msg.style.display='block';}return;}
+  if(msg)msg.style.display='none';
 
   const btn=document.getElementById('offerSaveBtn');
   btn.textContent='Saving...';btn.disabled=true;
 
-  const now=new Date();
-  if(editId){
-    const o=OFFERS.find(function(x){return x.id===editId;});
-    if(o){o.title=title;o.desc=desc;o.imageUrl=imageUrl;o.badge=badge;o.validTo=validTo;}
-    if(sb)await sb.from('offers').update({title,description:desc,image_url:imageUrl,badge,valid_to:validTo||null}).eq('id',editId);
-  } else {
-    const offer={id:'OFF-'+Date.now(),title,desc,imageUrl,badge,validTo,active:true,createdAt:now.toISOString()};
-    OFFERS.unshift(offer);
-    if(sb)await dbInsert('offers',{id:offer.id,title,description:desc,image_url:imageUrl,badge,valid_to:validTo||null,active:true});
+  try{
+    const now=new Date();
+    if(editId){
+      const o=OFFERS.find(function(x){return x.id===editId;});
+      if(o){o.title=title;o.desc=desc;o.imageUrl=imageUrl;o.badge=badge;o.validTo=validTo;}
+      if(sb){
+        const{error}=await sb.from('offers').update({title,description:desc,image_url:imageUrl,badge,valid_to:validTo||null}).eq('id',editId);
+        if(error)throw error;
+      }
+    } else {
+      const offer={id:'OFF-'+Date.now(),title,desc,imageUrl,badge,validTo,active:true,createdAt:now.toISOString()};
+      OFFERS.unshift(offer);
+      if(sb){
+        const{error}=await sb.from('offers').insert({id:offer.id,title,description:desc,image_url:imageUrl,badge,valid_to:validTo||null,active:true});
+        if(error)throw error;
+      }
+    }
+    closeOfferModal();
+    renderOffersAdmin();
+    renderRepOffers();
+    showToast(editId?'Offer updated ✓':'Offer posted ✓','success');
+  }catch(err){
+    console.error('saveOffer error:',err);
+    const errMsg=err&&err.message?err.message:'Save failed. Check Supabase table exists.';
+    if(msg){msg.textContent='Error: '+errMsg;msg.style.color='var(--red)';msg.style.display='block';}
+    showToast('Could not save offer: '+errMsg,'error',6000);
+  }finally{
+    btn.textContent=editId?'Update Offer':'Post Offer';btn.disabled=false;
   }
-
-  btn.textContent=editId?'Update Offer':'Post Offer';btn.disabled=false;
-  closeOfferModal();
-  renderOffersAdmin();
-  renderRepOffers();
 }
 
 async function deleteOffer(id){
-  if(!confirm('Delete this offer?'))return;
   const idx=OFFERS.findIndex(function(o){return o.id===id;});
   if(idx>=0)OFFERS.splice(idx,1);
-  if(sb)await sb.from('offers').update({active:false}).eq('id',id);
   renderOffersAdmin();
   renderRepOffers();
+  if(sb)await sb.from('offers').update({active:false}).eq('id',id);
+  showToast('Offer removed','info');
 }
 
 function renderOffersAdmin(){
