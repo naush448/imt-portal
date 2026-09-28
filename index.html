@@ -7967,13 +7967,17 @@ function renderFeatCbSearchResults(s){
   if(!sorted.length){el.innerHTML='<div style="text-align:center;padding:16px;color:var(--t3);font-size:13px">No products match.</div>';return;}
   el.innerHTML=sorted.slice(0,80).map(p=>{
     const isFeat=featIds.includes(Number(p.id));
+    const fn=isFeat?'removeFeatCb':'addFeatCb';
+    const btnBg=isFeat?'transparent':'var(--teal)';
+    const btnCol=isFeat?'var(--teal)':'#fff';
+    const btnLbl=isFeat?'Remove':'+ Add';
     return '<div style="display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:0.5px solid var(--b);background:'+(isFeat?'var(--teal-bg)':'var(--s)')+'">'
-      +'<div style="flex:1;min-width:0">'
+      +'<div style="flex:1;min-width:0;pointer-events:none">'
         +'<div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.name+'</div>'
         +'<div style="font-size:11px;color:var(--t3)">'+p.sku+' · LKR '+p.base.toLocaleString()+' · '+p.brand+'</div>'
       +'</div>'
-      +(isFeat?'<span class="badge bt" style="font-size:10px;margin-right:6px">✓ Featured</span>':'')
-      +'<button onclick="'+(isFeat?'removeFeatCb':'addFeatCb')+'('+p.id+')" style="padding:6px 14px;background:'+(isFeat?'transparent':'var(--teal)')+';color:'+(isFeat?'var(--teal)':'#fff')+';border:0.5px solid var(--teal);border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">'+(isFeat?'Remove':'+ Add')+'</button>'
+      +(isFeat?'<span class="badge bt" style="font-size:10px;margin-right:6px;pointer-events:none">✓ Featured</span>':'')
+      +'<button type="button" onclick="'+fn+'('+p.id+');return false;" style="padding:10px 16px;min-width:64px;background:'+btnBg+';color:'+btnCol+';border:1.5px solid var(--teal);border-radius:var(--rs);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;-webkit-tap-highlight-color:transparent;touch-action:manipulation">'+btnLbl+'</button>'
     +'</div>';
   }).join('');
 }
