@@ -7961,40 +7961,19 @@ function renderFeatCbSearchResults(s){
   if(s&&s.trim())src=src.filter(p=>p.name.toLowerCase().includes(s.toLowerCase())||p.sku.toLowerCase().includes(s.toLowerCase()));
   const featIds=FEATURED_CB_PRODUCTS.map(Number);
   const sorted=[...src.filter(p=>featIds.includes(Number(p.id))),...src.filter(p=>!featIds.includes(Number(p.id)))];
-  if(!sorted.length){el.innerHTML='<div style="text-align:center;padding:16px;color:var(--t3);font-size:13px">No products match.</div>';el._fcbBound=false;return;}
+  if(!sorted.length){el.innerHTML='<div style="text-align:center;padding:16px;color:var(--t3);font-size:13px">No products match.</div>';return;}
+  // Render each row as a full-width button for reliable mobile tapping
   el.innerHTML=sorted.slice(0,80).map(p=>{
     const isFeat=featIds.includes(Number(p.id));
-    return '<div data-pid="'+p.id+'" data-feat="'+(isFeat?'1':'0')+'" style="display:flex;align-items:center;gap:12px;padding:9px 14px;border-bottom:0.5px solid var(--b);background:'+(isFeat?'var(--teal-bg)':'var(--s)')+'">'
-      +'<div style="flex:1;min-width:0;pointer-events:none">'
+    const action=isFeat?'removeFeatCb':'addFeatCb';
+    return '<div onclick="'+action+'('+p.id+')" style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:0.5px solid var(--b);background:'+(isFeat?'var(--teal-bg)':'var(--s)')+';cursor:pointer;-webkit-tap-highlight-color:rgba(0,0,0,.08)">'
+      +'<div style="flex:1;min-width:0">'
         +'<div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.name+'</div>'
-        +'<div style="font-size:11px;color:var(--t3)">'+p.sku+' · LKR '+p.base.toLocaleString()+' · '+p.brand+'</div>'
+        +'<div style="font-size:11px;color:var(--t3);margin-top:1px">'+p.sku+' · LKR '+p.base.toLocaleString()+' · '+p.brand+'</div>'
       +'</div>'
-      +(isFeat?'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--teal-bg);color:var(--teal);pointer-events:none;margin-right:6px">✓ Featured</span>':'')
-      +'<button data-action="'+(isFeat?'remove':'add')+'" data-pid="'+p.id+'" style="padding:11px 18px;min-width:70px;background:'+(isFeat?'transparent':'var(--teal)')+';color:'+(isFeat?'var(--teal)':'#fff')+';border:1.5px solid var(--teal);border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0">'+(isFeat?'Remove':'+ Add')+'</button>'
+      +'<div style="flex-shrink:0;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700;background:'+(isFeat?'transparent':'var(--teal)')+';color:'+(isFeat?'var(--red)':'#fff')+';border:1.5px solid '+(isFeat?'var(--red)':'var(--teal)')+';">'+(isFeat?'Remove':'+ Add')+'</div>'
     +'</div>';
   }).join('');
-  // Use event delegation — one listener on container, not inline onclick
-  if(!el._fcbBound){
-    el._fcbBound=true;
-    el.addEventListener('click',function(e){
-      const btn=e.target.closest('button[data-action]');
-      if(!btn)return;
-      e.preventDefault();e.stopPropagation();
-      const pid=Number(btn.dataset.pid);
-      const action=btn.dataset.action;
-      if(action==='add')addFeatCb(pid);
-      else removeFeatCb(pid);
-    });
-    el.addEventListener('touchend',function(e){
-      const btn=e.target.closest('button[data-action]');
-      if(!btn)return;
-      e.preventDefault();
-      const pid=Number(btn.dataset.pid);
-      const action=btn.dataset.action;
-      if(action==='add')addFeatCb(pid);
-      else removeFeatCb(pid);
-    },{passive:false});
-  }
 }
 
 function addFeatCb(pid){
