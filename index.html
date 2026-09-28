@@ -3080,17 +3080,18 @@ async function deletePromoDB(productId){
   await sb.from('product_promos').delete().eq('product_id',productId);
 }
 async function saveFeaturedCbToDB(){
-  if(!sb){showToast('No database connection — changes saved locally only','warning');return;}
+  if(!sb)return; // no DB — local only, no toast needed
   try{
-    const{error:delErr}=await sb.from('featured_cb_products').delete().neq('product_id',0);
-    if(delErr)throw delErr;
+    // Delete all then re-insert (upsert pattern for small list)
+    await sb.from('featured_cb_products').delete().neq('product_id',-1);
     if(FEATURED_CB_PRODUCTS.length){
-      const{error:insErr}=await sb.from('featured_cb_products').insert(FEATURED_CB_PRODUCTS.map(function(id){return{product_id:Number(id)};}));
+      const rows=FEATURED_CB_PRODUCTS.map(function(id){return{product_id:Number(id)};});
+      const{error:insErr}=await sb.from('featured_cb_products').insert(rows);
       if(insErr)throw insErr;
     }
   }catch(e){
     console.error('saveFeaturedCbToDB:',e);
-    showToast('DB save failed: '+(e.message||'unknown error'),'error',6000);
+    showToast('Could not save to database: '+(e.message||'unknown error'),'error',6000);
   }
 }
 async function saveWHAccountsToDB(){
