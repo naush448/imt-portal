@@ -828,7 +828,7 @@ tr:hover td{background:var(--s2)}
             <button class="rfilter on" onclick="setFeatCbCat('all',this)">All</button>
           </div>
         </div>
-        <div id="featCbSearchResults" style="max-height:340px;overflow-y:auto"></div>
+        <div id="featCbSearchResults" style="max-height:340px;overflow-y:auto;border:0.5px solid var(--b);border-radius:var(--rs)"></div>
       </div>
     </div>
   </div>
@@ -7955,9 +7955,9 @@ function renderFeatCbList(){
 
 function renderFeatCbSearchResults(s){
   const el=document.getElementById('featCbSearchResults');if(!el)return;
-  let src=PRODUCTS;
+  let src=PRODUCTS.slice(); // always show all products
   if(featCbCatFilter!=='all')src=src.filter(p=>(p.brand||p.cat)===featCbCatFilter);
-  if(s)src=src.filter(p=>p.name.toLowerCase().includes(s.toLowerCase())||p.sku.toLowerCase().includes(s.toLowerCase()));
+  if(s&&s.trim())src=src.filter(p=>p.name.toLowerCase().includes(s.toLowerCase())||p.sku.toLowerCase().includes(s.toLowerCase()));
   // Separate featured vs not (normalise IDs to Number for safe comparison)
   const featIds=FEATURED_CB_PRODUCTS.map(Number);
   const featured=src.filter(p=>featIds.includes(Number(p.id)));
