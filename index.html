@@ -1852,6 +1852,9 @@ tr:hover td{background:var(--s2)}
       <div style="height:130px"></div>
     </div>
 
+    <!-- Cashback mobile banner — sits just above the sticky bar -->
+    <div id="rCashbackBannerMob" style="display:none;position:fixed;bottom:80px;left:0;right:0;z-index:179;padding:0 12px"></div>
+
     <!-- Sticky Place Order bar — shows on both mobile and desktop when cart has items -->
     <div id="rStickyOrder" style="display:none;position:fixed;bottom:0;left:0;right:0;background:var(--s);border-top:1.5px solid var(--teal);padding:12px 16px;z-index:180;box-shadow:0 -4px 16px rgba(0,0,0,.1)">
       <div style="display:flex;align-items:center;gap:12px;max-width:700px;margin:0 auto">
@@ -5423,36 +5426,38 @@ function renderRepCartPanel(){
 }
 
 function renderCashbackBanner(res){
-  const el=document.getElementById('rCashbackBanner');if(!el)return;
-  if(!FEATURED_CB_PRODUCTS.length){el.style.display='none';return;}
-  el.style.display='block';
+  const el=document.getElementById('rCashbackBanner');
+  const elMob=document.getElementById('rCashbackBannerMob');
+  if(!FEATURED_CB_PRODUCTS.length||!res.total){
+    if(el)el.style.display='none';
+    if(elMob)elMob.style.display='none';
+    return;
+  }
   const exclNote=CASHBACK_EXCL_CATS.length?' (excl. '+CASHBACK_EXCL_CATS.join('/')+')'  :'';
+  let html='',bg='',border='';
   if(res.eligible){
     const cb=Math.round(res.eligibleTotal*res.tier.pct);
-    el.style.background='var(--green-bg)';el.style.borderColor='rgba(15,110,86,.25)';
-    el.innerHTML='<div style="font-size:12px;font-weight:700;color:var(--green);margin-bottom:3px">🎉 Cashback eligible — '+res.tier.label+'</div>'
-      +'<div style="font-size:11px;color:var(--green)">Customer gets LKR '+cb.toLocaleString()+' cashback on LKR '+res.eligibleTotal.toLocaleString()+' eligible total'+exclNote+'</div>'
-      +'<div style="font-size:10px;color:var(--t3);margin-top:2px">Featured: '+Math.round(res.featPct*100)+'% of eligible total ✓</div>';
-  } else if(!res.total){
-    el.style.display='none';
+    bg='var(--green-bg)';border='rgba(15,110,86,.25)';
+    html='<div style="font-size:13px;font-weight:700;color:var(--green);margin-bottom:3px">🎉 Cashback eligible — '+res.tier.label+'</div>'
+      +'<div style="font-size:12px;color:var(--green);font-weight:600">Customer gets LKR '+cb.toLocaleString()+' cashback'+exclNote+'</div>'
+      +'<div style="font-size:11px;color:var(--t2);margin-top:2px">Featured: '+Math.round(res.featPct*100)+'% ✓ · Eligible total: LKR '+res.eligibleTotal.toLocaleString()+'</div>';
   } else {
     const eligible=res.eligibleTotal||0;
-    const need100=Math.max(0,100000-eligible);
-    const need200=Math.max(0,200000-eligible);
     const needFeat=res.needMore||0;
-    el.style.background='var(--s2)';el.style.borderColor='var(--b2)';
+    bg='var(--amber-bg)';border='rgba(217,119,6,.3)';
     let msg='';
     if(eligible<100000){
-      msg='Add LKR '+need100.toLocaleString()+' more eligible products to unlock 12% cashback'+exclNote;
+      msg='Add LKR '+(100000-eligible).toLocaleString()+' more to unlock 12% cashback'+exclNote;
     } else if(!res.meetsMinPct&&needFeat>0){
-      msg='Add LKR '+needFeat.toLocaleString()+' more from ⭐ featured products (need '+Math.round(FEATURED_CB_MIN_PCT*100)+'%)';
+      msg='Need LKR '+Math.round(needFeat).toLocaleString()+' more from ⭐ featured products (need '+Math.round(FEATURED_CB_MIN_PCT*100)+'%)';
     } else {
-      msg='Add LKR '+need200.toLocaleString()+' more to upgrade to 15% cashback';
+      msg='Add LKR '+(200000-eligible).toLocaleString()+' more to upgrade to 15% cashback';
     }
-    el.innerHTML='<div style="font-size:11px;font-weight:600;color:var(--amber);margin-bottom:2px">💰 Cashback available</div>'
-      +'<div style="font-size:11px;color:var(--t2)">'+msg+'</div>'
-      +(eligible>0&&eligible!==res.total?'<div style="font-size:10px;color:var(--t3);margin-top:2px">Eligible total: LKR '+eligible.toLocaleString()+exclNote+'</div>':'');
+    html='<div style="font-size:13px;font-weight:700;color:var(--amber);margin-bottom:3px">💰 Cashback available</div>'
+      +'<div style="font-size:12px;color:var(--t2)">'+msg+'</div>';
   }
+  if(el){el.style.display='block';el.style.background=bg;el.style.borderColor=border;el.innerHTML=html;}
+  if(elMob){elMob.style.display='block';elMob.innerHTML='<div style="padding:10px 12px;border-radius:8px;border:1px solid '+border+';background:'+bg+'">'+html+'</div>';}
 }
 
 function updateRepOrderBtn(){
