@@ -641,6 +641,25 @@ tr:hover td{background:var(--s2)}
       <table><thead><tr><th>Order #</th><th>Rep</th><th>Customer</th><th>Date</th><th>Value</th><th>Auto-approved</th><th>Status</th><th>Action</th></tr></thead>
       <tbody id="aRepOrdBody"><tr><td colspan="8" style="text-align:center;color:var(--t3);padding:16px">No orders yet</td></tr></tbody></table>
     </div>
+    <!-- Cashback Report -->
+    <div class="card" style="margin-top:14px;border-left:3px solid var(--teal)">
+      <div class="ch">
+        <h3>💰 Cashback Report</h3>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="cbRepFilter" onchange="renderCbReport()" style="font-size:12px;padding:4px 8px;border:1px solid var(--b2);border-radius:6px;background:var(--s);color:var(--t);font-family:inherit">
+            <option value="all">All eligible</option>
+            <option value="12%">12% tier</option>
+            <option value="15%">15% tier</option>
+          </select>
+          <button class="btn btn-outline btn-sm" onclick="exportCbReportCSV()" style="font-size:11px">📥 Export CSV</button>
+        </div>
+      </div>
+      <div id="cbReportKpis" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px"></div>
+      <div id="cbReportTable" style="overflow-x:auto">
+        <table><thead><tr><th>Order #</th><th>Rep</th><th>Customer</th><th>Date</th><th>Order Value</th><th>Eligible Total</th><th>Tier</th><th>Cashback</th><th>Status</th></tr></thead>
+        <tbody id="cbReportBody"><tr><td colspan="9" style="text-align:center;color:var(--t3);padding:16px">No cashback-eligible orders yet</td></tr></tbody></table>
+      </div>
+    </div>
   </div>
 
   <!-- ═══════════════ OFFERS BOARD (ADMIN) ═══════════════ -->
@@ -2856,6 +2875,7 @@ async function loadOrdersFromDB(){
       cancel_reason:o.cancel_reason||'',cancelledAt:o.cancelledat||'',
       cashbackEligible:o.cashback_eligible||false,
       cashbackTier:o.cashback_tier?{label:o.cashback_tier}:null,
+      cashbackEligibleTotal:Number(o.cashback_eligible_total)||0,
       cashbackAmount:Number(o.cashback_amount)||0
     }));
     DIST_ORDERS=data.filter(o=>o.type==='dist').map(o=>({
@@ -4435,7 +4455,7 @@ function goto(id,el){
   if(mobTitle)mobTitle.textContent=pt;
   if(id==='p-a-dists'){loadOrdersFromDB().then(()=>{renderAdminDistGrid();renderDistOrders();});}
   if(id==='p-a-distdiscount')renderDistDiscountPage();
-  if(id==='p-a-reps'){loadOrdersFromDB().then(()=>{renderAdminRepTable();renderRepOrders();});}
+  if(id==='p-a-reps'){loadOrdersFromDB().then(()=>{renderAdminRepTable();renderRepOrders();renderCbReport();});}
   if(id==='p-a-visits')renderVisitTracker();
   if(id==='p-a-managereps')renderRepMgmtTable();
   if(id==='p-a-managecusts')renderCustMgmtPage();
@@ -4666,21 +4686,21 @@ function approveOrd(arr,id){
   const o=arr.find(x=>x.id===id);
   if(o){o.status='Approved';o.approvedAt=new Date().toLocaleString('en-GB',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
   dbUpdate('orders',{status:'Approved',approved_at:o?o.approvedAt:null},{id});
-  renderPendingOrders();renderDistOrders();renderRepOrders();
+  renderPendingOrders();renderDistOrders();renderRepOrders();renderCbReport();
   showToast('Order '+id+' approved ✓','success');
 }
 function rejectOrd(arr,id){
   const o=arr.find(x=>x.id===id);
   if(o)o.status='Rejected';
   dbUpdate('orders',{status:'Rejected'},{id});
-  renderPendingOrders();renderDistOrders();renderRepOrders();
+  renderPendingOrders();renderDistOrders();renderRepOrders();renderCbReport();
   showToast('Order '+id+' rejected','info');
 }
 function dispatchOrd(arr,id){
   const o=arr.find(x=>x.id===id);
   if(o){o.status='Dispatched';o.dispatchedAt=new Date().toLocaleString('en-GB',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});}
   dbUpdate('orders',{status:'Dispatched',dispatched_at:o?o.dispatchedAt:null},{id});
-  renderPendingOrders();renderDistOrders();renderRepOrders();
+  renderPendingOrders();renderDistOrders();renderRepOrders();renderCbReport();
   showToast('Order '+id+' dispatched ✓','success');
 }
 
@@ -4824,6 +4844,52 @@ function renderRepOrders(){
     const action=o.status==='Pending'?`<button class="btn btn-green btn-sm" onclick="approveOrd(REP_ORDERS,'${o.id}');renderRepOrders()">Approve</button>`:o.status==='Approved'?`<button class="btn btn-blue btn-sm" onclick="dispatchOrd(REP_ORDERS,'${o.id}');renderRepOrders()">Mark Dispatched</button>`:'—';
     return `<tr><td><strong>${o.id}</strong>${cbTag}</td><td>${o.repName}</td><td>${o.custName}</td><td>${o.date}</td><td>${fmt(o.total)}${o.cashbackEligible?`<div style="font-size:10px;color:var(--teal)">LKR ${(o.cashbackAmount||0).toLocaleString()} CB</div>`:''}</td><td>${autoTag}</td><td><span class="badge ${bc[o.status]}">${bl[o.status]||o.status}</span></td><td>${action}</td></tr>`;
   }).join('');
+}
+
+function renderCbReport(){
+  const filter=(document.getElementById('cbRepFilter')||{}).value||'all';
+  const eligible=REP_ORDERS.filter(o=>o.cashbackEligible&&(filter==='all'||o.cashbackTier?.label===filter));
+  // KPIs
+  const kpiEl=document.getElementById('cbReportKpis');
+  if(kpiEl){
+    const totalCb=eligible.reduce((s,o)=>s+(o.cashbackAmount||0),0);
+    const totalVal=eligible.reduce((s,o)=>s+(o.total||0),0);
+    const t12=eligible.filter(o=>o.cashbackTier?.label==='12%').length;
+    const t15=eligible.filter(o=>o.cashbackTier?.label==='15%').length;
+    kpiEl.innerHTML=[
+      {l:'Eligible Orders',v:eligible.length,c:'var(--teal)'},
+      {l:'Total Cashback Due',v:'LKR '+totalCb.toLocaleString(),c:'var(--green)'},
+      {l:'Total Order Value',v:'LKR '+totalVal.toLocaleString(),c:'var(--blue)'},
+      {l:'12% Tier Orders',v:t12,c:'var(--amber)'},
+      {l:'15% Tier Orders',v:t15,c:'var(--teal)'}
+    ].map(k=>`<div style="background:var(--s2);border-radius:var(--rs);padding:10px 14px;flex:1;min-width:120px">
+      <div style="font-size:11px;color:var(--t3);margin-bottom:2px">${k.l}</div>
+      <div style="font-size:15px;font-weight:700;color:${k.c}">${k.v}</div>
+    </div>`).join('');
+  }
+  // Table
+  const tb=document.getElementById('cbReportBody');if(!tb)return;
+  if(!eligible.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;color:var(--t3);padding:16px">No cashback-eligible orders yet</td></tr>';return;}
+  const bc={Pending:'bt',Approved:'bg',Rejected:'br',Dispatched:'bp'};
+  tb.innerHTML=eligible.map(o=>`<tr>
+    <td><strong>${o.id}</strong></td>
+    <td>${o.repName||'—'}</td>
+    <td>${o.custName||'—'}</td>
+    <td>${o.date}</td>
+    <td style="font-weight:600">${fmt(o.total)}</td>
+    <td>${o.cashbackEligibleTotal?fmt(o.cashbackEligibleTotal):fmt(o.total)}</td>
+    <td><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--teal-bg);color:var(--teal)">${o.cashbackTier?.label||'—'}</span></td>
+    <td style="font-weight:700;color:var(--green)">LKR ${(o.cashbackAmount||0).toLocaleString()}</td>
+    <td><span class="badge ${bc[o.status]||'bt'}">${o.status}</span></td>
+  </tr>`).join('');
+}
+function exportCbReportCSV(){
+  const eligible=REP_ORDERS.filter(o=>o.cashbackEligible);
+  if(!eligible.length){showToast('No cashback-eligible orders to export','warning');return;}
+  const rows=[['Order #','Rep','Customer','Date','Order Value','Cashback Tier','Cashback Amount (LKR)','Status'],...eligible.map(o=>[o.id,o.repName||'',o.custName||'',o.date,o.total,o.cashbackTier?.label||'',o.cashbackAmount||0,o.status])];
+  const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='cashback-report-'+new Date().toISOString().slice(0,10)+'.csv';a.click();
 }
 
 // ══════════════════════ DIST DISCOUNTS ══════════════════════
@@ -5568,7 +5634,8 @@ async function submitRepOrder(){
   const cbRes=checkFeatCbEligibility(rCart);
   const cashbackEligible=cbRes.eligible;
   const cashbackTier=cbRes.tier||null;
-  const cashbackAmount=cashbackEligible?Math.round(cbRes.eligibleTotal*(cbRes.tier?.pct||0)):0;
+  const cashbackEligibleTotal=cbRes.eligibleTotal||0;
+  const cashbackAmount=cashbackEligible?Math.round(cashbackEligibleTotal*(cbRes.tier?.pct||0)):0;
   // Auto-approve logic — use customer limit if set, else rep limit
   const custLimit=Number(cust.autoApproveLimit)||0;
   const repLimit=Number(curRep.autoApproveLimit)||0;
@@ -5582,7 +5649,7 @@ async function submitRepOrder(){
     repKey,repName:curRep.name,
     custKey:custK,custName:cust.name,
     items,total,
-    cashbackEligible,cashbackTier,cashbackAmount,
+    cashbackEligible,cashbackTier,cashbackEligibleTotal,cashbackAmount,
     note:document.getElementById('rOrdNote').value,
     status,autoApproved,
     approvedAt:autoApproved?now.toLocaleString('en-GB',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):null
@@ -5599,6 +5666,7 @@ async function submitRepOrder(){
       approved_at:order.approvedAt,
       cashback_eligible:order.cashbackEligible,
       cashback_tier:order.cashbackTier?order.cashbackTier.label:null,
+      cashback_eligible_total:order.cashbackEligibleTotal||0,
       cashback_amount:order.cashbackAmount||0
     });
     await saveRepSalesToDB(repKey,curRep.juneS);
