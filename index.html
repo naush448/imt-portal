@@ -2850,7 +2850,10 @@ async function loadOrdersFromDB(){
       custName:o.cust_name,items:o.items,total:Number(o.total),status:o.status,
       note:o.note,date:o.date,autoApproved:o.auto_approved,
       approvedAt:o.approved_at,dispatchedAt:o.dispatched_at,
-      cancel_reason:o.cancel_reason||'',cancelledAt:o.cancelledat||''
+      cancel_reason:o.cancel_reason||'',cancelledAt:o.cancelledat||'',
+      cashbackEligible:o.cashback_eligible||false,
+      cashbackTier:o.cashback_tier?{label:o.cashback_tier}:null,
+      cashbackAmount:Number(o.cashback_amount)||0
     }));
     DIST_ORDERS=data.filter(o=>o.type==='dist').map(o=>({
       id:o.id,distKey:o.dist_key,dist:o.dist_name,items:o.items,
@@ -4814,8 +4817,9 @@ function renderRepOrders(){
   const bl={Pending:'⏳ Pending',Approved:'✅ Approved',Rejected:'✗ Rejected',Dispatched:'🚚 Dispatched'};
   tb.innerHTML=!REP_ORDERS.length?'<tr><td colspan="8" style="text-align:center;color:var(--t3);padding:16px">No orders yet</td></tr>':REP_ORDERS.map(o=>{
     const autoTag=o.autoApproved?'<span class="badge bt" style="font-size:10px">⚡ Auto</span>':'<span style="font-size:11px;color:var(--t3)">Manual</span>';
+    const cbTag=o.cashbackEligible?`<span class="badge" style="font-size:10px;background:var(--teal-bg);color:var(--teal)">💰 ${o.cashbackTier?.label||''} CB</span>`:'';
     const action=o.status==='Pending'?`<button class="btn btn-green btn-sm" onclick="approveOrd(REP_ORDERS,'${o.id}');renderRepOrders()">Approve</button>`:o.status==='Approved'?`<button class="btn btn-blue btn-sm" onclick="dispatchOrd(REP_ORDERS,'${o.id}');renderRepOrders()">Mark Dispatched</button>`:'—';
-    return `<tr><td><strong>${o.id}</strong></td><td>${o.repName}</td><td>${o.custName}</td><td>${o.date}</td><td>${fmt(o.total)}</td><td>${autoTag}</td><td><span class="badge ${bc[o.status]}">${bl[o.status]||o.status}</span></td><td>${action}</td></tr>`;
+    return `<tr><td><strong>${o.id}</strong>${cbTag}</td><td>${o.repName}</td><td>${o.custName}</td><td>${o.date}</td><td>${fmt(o.total)}${o.cashbackEligible?`<div style="font-size:10px;color:var(--teal)">LKR ${(o.cashbackAmount||0).toLocaleString()} CB</div>`:''}</td><td>${autoTag}</td><td><span class="badge ${bc[o.status]}">${bl[o.status]||o.status}</span></td><td>${action}</td></tr>`;
   }).join('');
 }
 
@@ -5555,6 +5559,11 @@ async function submitRepOrder(){
   });
   const total=items.reduce((a,b)=>a+b.sub,0);
   const cust=CUSTOMERS[custK];
+  // Cashback eligibility at time of order
+  const cbRes=checkFeatCbEligibility(rCart);
+  const cashbackEligible=cbRes.eligible;
+  const cashbackTier=cbRes.tier||null;
+  const cashbackAmount=cashbackEligible?Math.round(cbRes.eligibleTotal*(cbRes.tier?.pct||0)):0;
   // Auto-approve logic — use customer limit if set, else rep limit
   const custLimit=Number(cust.autoApproveLimit)||0;
   const repLimit=Number(curRep.autoApproveLimit)||0;
@@ -5568,6 +5577,7 @@ async function submitRepOrder(){
     repKey,repName:curRep.name,
     custKey:custK,custName:cust.name,
     items,total,
+    cashbackEligible,cashbackTier,cashbackAmount,
     note:document.getElementById('rOrdNote').value,
     status,autoApproved,
     approvedAt:autoApproved?now.toLocaleString('en-GB',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):null
@@ -5581,7 +5591,10 @@ async function submitRepOrder(){
       cust_key:order.custKey,cust_name:order.custName,
       items:order.items,total:order.total,status:order.status,
       note:order.note,date:order.date,auto_approved:order.autoApproved,
-      approved_at:order.approvedAt
+      approved_at:order.approvedAt,
+      cashback_eligible:order.cashbackEligible,
+      cashback_tier:order.cashbackTier?order.cashbackTier.label:null,
+      cashback_amount:order.cashbackAmount||0
     });
     await saveRepSalesToDB(repKey,curRep.juneS);
   }catch(e){
@@ -5592,9 +5605,10 @@ async function submitRepOrder(){
   const sBar=document.getElementById('rStickyOrder');if(sBar)sBar.style.display='none';
   repOrderRefresh();
   document.getElementById('modalTitle').textContent=autoApproved?'Order auto-approved! ⚡':'Order submitted!';
-  document.getElementById('modalDesc').textContent=autoApproved
+  const cbNote=cashbackEligible?`\n\n💰 Cashback eligible — ${cashbackTier.label} · LKR ${cashbackAmount.toLocaleString()} back for the customer.`:'';
+  document.getElementById('modalDesc').textContent=(autoApproved
     ?`Order for ${cust.name} (${fmt(total)}) auto-approved. Tap WhatsApp below to notify Usman.`
-    :`Order for ${cust.name} (${fmt(total)}) sent for Usman's approval. Tap WhatsApp to notify him now.`;
+    :`Order for ${cust.name} (${fmt(total)}) sent for Usman's approval. Tap WhatsApp to notify him now.`)+cbNote;
   document.getElementById('okModal').classList.add('open');
   // Fire WhatsApp notification
   addWAButtonToModal(buildRepOrderWA(order));
@@ -5615,7 +5629,8 @@ function renderRepMyOrders(){
   const bc={Pending:'bt',Approved:'bg',Rejected:'br'};
   tb.innerHTML=!mine.length?'<tr><td colspan="7" style="text-align:center;color:var(--t3);padding:16px">No orders yet.</td></tr>':mine.map(o=>{
     const autoTag=o.autoApproved?'<span class="badge bt" style="font-size:10px">⚡ Auto</span>':'<span style="font-size:11px;color:var(--t3)">Manual</span>';
-    return `<tr><td><strong>${o.id}</strong></td><td>${o.custName}</td><td>${o.date}</td><td style="font-size:12px;max-width:160px">${o.items.map(i=>i.name+' ×'+i.qty).join(', ')}</td><td style="font-weight:600">${fmt(o.total)}</td><td>${autoTag}</td><td><span class="badge ${bc[o.status]}">${o.status}</span></td></tr>`;
+    const cbTag=o.cashbackEligible?`<div style="font-size:10px;color:var(--teal);font-weight:600;margin-top:1px">💰 ${o.cashbackTier?.label||''} · LKR ${(o.cashbackAmount||0).toLocaleString()} CB</div>`:'';
+    return `<tr><td><strong>${o.id}</strong></td><td>${o.custName}</td><td>${o.date}</td><td style="font-size:12px;max-width:160px">${o.items.map(i=>i.name+' ×'+i.qty).join(', ')}</td><td style="font-weight:600">${fmt(o.total)}${cbTag}</td><td>${autoTag}</td><td><span class="badge ${bc[o.status]}">${o.status}</span></td></tr>`;
   }).join('');
 }
 
@@ -6169,6 +6184,7 @@ function renderWQueue(){
             <span style="font-size:11px;font-weight:600;padding:2px 10px;border-radius:20px;background:${o.channel==='dist'?'var(--green-bg)':'var(--teal-bg)'};color:${chanCol}">${o.channelLabel}</span>
             <span style="font-size:11px;color:var(--t3)">📅 ${o.date}</span>
             ${o.approvedAt?`<span style="font-size:11px;color:var(--green)">✅ Approved ${o.approvedAt}</span>`:''}
+            ${o.cashbackEligible?`<span style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;background:var(--teal-bg);color:var(--teal)">💰 ${o.cashbackTier?.label||''} Cashback — LKR ${(o.cashbackAmount||0).toLocaleString()}</span>`:''}
           </div>
           <div style="font-size:13px;font-weight:600;margin-bottom:10px">📦 ${o.who}</div>
           <div style="background:var(--s2);border-radius:var(--rs);padding:10px 12px">
