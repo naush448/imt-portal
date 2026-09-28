@@ -62,8 +62,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #app{display:none;min-height:100vh}
 .layout{display:flex;min-height:100vh}
 .sidebar{width:220px;background:var(--s);border-right:0.5px solid var(--b);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:100}
-.sb-head{padding:15px 14px;border-bottom:0.5px solid var(--b)}
-.sb-logo{display:flex;align-items:center;gap:9px}
+.sb-head{padding:15px 14px;border-bottom:0.5px solid var(--b);display:flex;align-items:center;gap:10px}
+.sb-logo{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
 .sb-ico{width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
 .sb-ico.admin{background:#B5D4F4;color:#0C447C}
 .sb-ico.dist{background:var(--green-bg);color:var(--green)}
@@ -214,20 +214,27 @@ tr:hover td{background:var(--s2)}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
 
 /* ── MOBILE RESPONSIVE ── */
+/* ── Mobile top bar ── */
 .mob-topbar{display:none;background:var(--s);border-bottom:0.5px solid var(--b);padding:11px 16px;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:200}
 .mob-brand{display:flex;align-items:center;gap:8px}
 .mob-title{font-size:14px;font-weight:600}
-.ham{background:none;border:none;cursor:pointer;padding:6px;border-radius:var(--rs);display:flex;flex-direction:column;gap:4px}
-.ham span{display:block;width:20px;height:2px;background:var(--t);border-radius:1px;transition:all .2s}
-.mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:150}
-.mob-overlay.open{display:block}
+.ham{background:none;border:none;cursor:pointer;padding:8px;border-radius:var(--rs);display:flex;flex-direction:column;gap:4px;-webkit-tap-highlight-color:transparent}
+.ham span{display:block;width:20px;height:2px;background:var(--t);border-radius:2px;transition:all .22s}
+
+/* ── Full-screen nav drawer (replaces partial-width sidebar on mobile) ── */
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+/* ── Bottom nav ── */
 .mob-bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--s);border-top:0.5px solid var(--b);z-index:99999;padding:0 0 env(safe-area-inset-bottom)}
-.mbn-items{display:flex;align-items:stretch;padding-right:0}
-.mbn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 2px;cursor:pointer;border:none;background:none;font-family:inherit;color:var(--t3);font-size:10px;font-weight:500;gap:3px;min-height:56px;transition:color .12s;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.mbn-items{display:flex;align-items:stretch}
+.mbn-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 2px;cursor:pointer;border:none;background:none;font-family:inherit;color:var(--t3);font-size:10px;font-weight:500;gap:3px;min-height:56px;transition:color .12s;-webkit-tap-highlight-color:transparent;touch-action:manipulation;position:relative}
 .mbn-item.on{color:var(--blue)}
-.mbn-item svg{opacity:.7}.mbn-item.on svg{opacity:1}
+.mbn-item.on svg{opacity:1}
+.mbn-item svg{opacity:.6;transition:opacity .12s}
 .mbn-dot{position:absolute;top:6px;right:calc(50% - 18px);width:7px;height:7px;border-radius:50%;background:var(--red);display:none}
 .mbn-dot.show{display:block}
+/* Active indicator pill under bottom nav icon */
+.mbn-item.on::after{content:'';display:block;position:absolute;bottom:6px;left:50%;transform:translateX(-50%);width:18px;height:3px;background:var(--blue);border-radius:2px}
 
 /* Rep order mobile cart bar */
 .mob-cart-bar{display:none;position:fixed;bottom:56px;left:0;right:0;background:var(--blue);color:#fff;padding:12px 18px;z-index:190;cursor:pointer;border:none;width:100%;font-family:inherit;align-items:center;justify-content:space-between;box-shadow:0 -2px 10px rgba(0,0,0,.15)}
@@ -240,8 +247,29 @@ tr:hover td{background:var(--s2)}
 .mob-cart-handle{width:36px;height:4px;background:var(--b2);border-radius:2px;margin:12px auto 16px}
 
 @media (max-width: 767px) {
-  .sidebar{display:none !important}
-  .sidebar.mob-open{display:flex !important;position:fixed;left:0;top:0;bottom:0;z-index:160;width:78vw;max-width:280px;box-shadow:4px 0 24px rgba(0,0,0,.25);overflow-y:auto}
+  /* Sidebar becomes a full-screen slide-in nav drawer */
+  .sidebar{
+    display:none !important;
+    transform:translateX(-100%);
+    transition:transform .22s cubic-bezier(.4,0,.2,1);
+  }
+  .sidebar.mob-open{
+    display:flex !important;
+    position:fixed;
+    left:0;top:0;right:0;bottom:0;
+    width:100vw;
+    max-width:100vw;
+    z-index:160;
+    overflow-y:auto;
+    box-shadow:none;
+    transform:translateX(0);
+    animation:drawerIn .22s cubic-bezier(.4,0,.2,1);
+  }
+  /* Close button inside the drawer on mobile */
+  .sb-mob-close{display:flex !important}
+
+  @keyframes drawerIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+
   .main{margin-left:0 !important}
   .topbar{display:none}
   .mob-topbar{display:flex}
@@ -254,13 +282,15 @@ tr:hover td{background:var(--s2)}
   th,td{padding:8px 10px}
   .prod-grid{grid-template-columns:1fr 1fr}
   .dist-grid{grid-template-columns:1fr}
-  /* Hide desktop order layout on mobile */
   #p-r-order .desktop-order-layout{display:none !important}
   #p-r-order .mobile-order-layout{display:block !important}
   #p-a-import .cb > div[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr !important}
   #p-a-settings .cb > div[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr !important}
   .chat-wrap{height:calc(100vh - 130px)}
 }
+
+/* Hide close button on desktop */
+.sb-mob-close{display:none}
 @media (min-width:768px){
   .mobile-order-layout{display:none !important}
   .mob-cart-bar{display:none !important}
@@ -392,16 +422,13 @@ tr:hover td{background:var(--s2)}
 <div id="app">
 <div class="layout">
 
-<!-- Mobile overlay -->
-<div class="mob-overlay" id="mobOverlay" onclick="closeSidebar()"></div>
-
 <!-- Mobile top bar -->
 <div class="mob-topbar" id="mobTopbar">
   <div class="mob-brand">
-    <button class="ham" onclick="toggleSidebar()" aria-label="Menu">
+    <button class="ham" onclick="toggleSidebar()" aria-label="Open menu">
       <span></span><span></span><span></span>
     </button>
-    <div id="mobTitle" style="font-size:14px;font-weight:600">Dashboard</div>
+    <div id="mobTitle" style="font-size:15px;font-weight:700;letter-spacing:-.01em">Dashboard</div>
   </div>
   <div id="mobRight" style="display:flex;align-items:center;gap:8px">
     <button onclick="doLogout()" style="padding:6px 14px;background:none;border:1px solid var(--b2);border-radius:20px;font-size:12px;font-weight:600;color:var(--t2);cursor:pointer;font-family:inherit;touch-action:manipulation">Exit</button>
@@ -457,6 +484,11 @@ tr:hover td{background:var(--s2)}
       <div class="sb-ico" id="sbIco">IMT</div>
       <div><div class="sb-co">IM Trading Lanka</div><div class="sb-portal" id="sbPortal">Portal</div></div>
     </div>
+    <!-- Close button — only visible inside full-screen drawer on mobile -->
+    <button class="sb-mob-close" onclick="closeSidebar()" aria-label="Close menu"
+      style="background:var(--s2);border:none;border-radius:50%;width:36px;height:36px;display:none;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;margin-left:auto;color:var(--t2);font-size:20px;line-height:1;-webkit-tap-highlight-color:transparent">
+      ×
+    </button>
   </div>
   <nav class="sb-nav" id="sbNav"></nav>
   <div class="sb-foot">
@@ -4352,7 +4384,12 @@ function goto(id,el){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
   const p=document.getElementById(id);if(p)p.classList.add('on');if(el)el.classList.add('on');
-  document.getElementById('pgTitle').textContent=PT[id]||id;
+  // Auto-close drawer on mobile when a nav item is tapped
+  closeSidebar();
+  const pt=PT[id]||id;
+  document.getElementById('pgTitle').textContent=pt;
+  const mobTitle=document.getElementById('mobTitle');
+  if(mobTitle)mobTitle.textContent=pt;
   if(id==='p-a-dists'){loadOrdersFromDB().then(()=>{renderAdminDistGrid();renderDistOrders();});}
   if(id==='p-a-distdiscount')renderDistDiscountPage();
   if(id==='p-a-reps'){loadOrdersFromDB().then(()=>{renderAdminRepTable();renderRepOrders();});}
@@ -6208,16 +6245,14 @@ let repCatFilter='all', repBrandFilter='all', repSort='name';
 
 function toggleSidebar(){
   const sb=document.querySelector('.sidebar');
-  const ov=document.getElementById('mobOverlay');
   if(!sb)return;
-  sb.classList.toggle('mob-open');
-  if(ov)ov.classList.toggle('open');
+  const isOpen=sb.classList.toggle('mob-open');
+  document.body.style.overflow=isOpen?'hidden':'';
 }
 function closeSidebar(){
   const sb=document.querySelector('.sidebar');
-  const ov=document.getElementById('mobOverlay');
   if(sb)sb.classList.remove('mob-open');
-  if(ov)ov.classList.remove('open');
+  document.body.style.overflow='';
 }
 
 // Build mobile bottom nav for reps
