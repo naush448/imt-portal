@@ -802,6 +802,22 @@ tr:hover td{background:var(--s2)}
       </div>
     </div>
 
+    <!-- Excluded categories -->
+    <div class="card" style="margin-bottom:14px;border-left:3px solid var(--amber)">
+      <div class="ch">
+        <div>
+          <h3>🚫 Excluded Categories</h3>
+          <div style="font-size:11px;color:var(--t3);font-weight:400;margin-top:2px">Products in these categories are excluded from the cashback-eligible order total (thresholds &amp; 30% rule)</div>
+        </div>
+      </div>
+      <div class="cb">
+        <div id="exclCatChips" style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px"></div>
+        <div style="font-size:11px;color:var(--t3);line-height:1.6" id="exclCatNote">
+          e.g. if BATTERY is excluded and a customer orders LKR 120,000 with LKR 20,000 in batteries — the eligible total is LKR 100,000.
+        </div>
+      </div>
+    </div>
+
     <!-- Currently featured products -->
     <div class="card" style="margin-bottom:14px">
       <div class="ch">
@@ -2967,6 +2983,7 @@ async function loadConfigFromDB(){
         if(row.key==='wh_can_see_visits')WH_CAN_SEE_VISITS=val;
         if(row.key==='invoice_counter'&&val)INVOICE_COUNTER=Number(val)||1;
         if(row.key==='payment_edit_passcode'&&val)PAYMENT_EDIT_PASSCODE=val;
+        if(row.key==='cashback_excl_cats'&&Array.isArray(val))CASHBACK_EXCL_CATS=val;
       }catch(e){}
     });
     console.log('Config loaded from DB');
@@ -4146,6 +4163,7 @@ let PRICE_LISTS=[
 let FEATURED_CB_PRODUCTS=[]; // array of product IDs chosen by admin
 let FEATURED_CB_MIN_PCT=0.30; // minimum % of order from featured products
 let featCbCatFilter='all'; // category filter for the featured products picker
+let CASHBACK_EXCL_CATS=[]; // categories excluded from cashback-eligible order total
 
 // ── Visit tracking ──
 let VISITS=[]; // {id,repKey,repName,custKey,custName,date,time,ts,lat,lng,accuracy}
@@ -5065,15 +5083,18 @@ function updateMilestone(cardId,subId,target,current){
 function calcCashback(val){
   const amt=parseFloat(val)||0;
   const hasFeatured=FEATURED_CB_PRODUCTS.length>0;
+  const hasExcl=CASHBACK_EXCL_CATS.length>0;
+  // The amount entered is treated as the eligible total (excl. excluded categories)
   const tier=amt>=200000?{pct:0.15,label:'Tier 2 — 15% cashback'}:amt>=100000?{pct:0.12,label:'Tier 1 — 12% cashback'}:null;
   const save=tier?Math.round(amt*tier.pct):0;const net=amt-save;
   const saveEl=document.getElementById('cbCalcSave');const tierEl=document.getElementById('cbCalcTier');
   const netEl=document.getElementById('cbCalcNet');const nudgeEl=document.getElementById('cbCalcNudge');const pitch=document.getElementById('cbPitchBox');
   if(saveEl){saveEl.textContent=save>0?fmt(save):'LKR 0';saveEl.style.color=save>0?'var(--green)':'var(--t3)';}
   if(tierEl){
-    if(!tier)tierEl.textContent='Below minimum — need LKR 100,000';
-    else if(hasFeatured)tierEl.textContent=tier.label+' (if '+Math.round(FEATURED_CB_MIN_PCT*100)+'% from featured products)';
-    else tierEl.textContent=tier.label;
+    const exclNote=hasExcl?' (excl. '+CASHBACK_EXCL_CATS.join('/')+')':'';
+    if(!tier)tierEl.textContent='Below minimum — need LKR 100,000'+exclNote;
+    else if(hasFeatured)tierEl.textContent=tier.label+' (if '+Math.round(FEATURED_CB_MIN_PCT*100)+'% from featured products)'+exclNote;
+    else tierEl.textContent=tier.label+exclNote;
   }
   if(netEl)netEl.textContent=save>0?'Customer pays net: '+fmt(net):'';
   if(nudgeEl){
@@ -5081,11 +5102,13 @@ function calcCashback(val){
     else if(amt<200000)nudgeEl.textContent='Add LKR '+(200000-amt).toLocaleString()+' more to get 15% cashback';
     else nudgeEl.textContent='Maximum cashback tier unlocked!';
     if(hasFeatured&&tier){nudgeEl.textContent+=' · Must include '+Math.round(FEATURED_CB_MIN_PCT*100)+'%+ from featured products.';}
+    if(hasExcl){nudgeEl.textContent+=' · Excl. '+CASHBACK_EXCL_CATS.join(', ')+'.';}
   }
   if(pitch){if(save>0){pitch.style.display='block';const pt=document.getElementById('cbPitchText');
     if(pt){
       let msg='Hi! Special offer from IM Trading Lanka:\n\nOrder LKR '+amt.toLocaleString()+' of selected products and get '+(tier.pct*100)+'% cash back — LKR '+save.toLocaleString()+' back!\n\nYou pay: LKR '+net.toLocaleString()+'\nCashback: LKR '+save.toLocaleString();
       if(hasFeatured)msg+='\n\nCondition: At least '+Math.round(FEATURED_CB_MIN_PCT*100)+'% of your order must be from our featured products (marked ⭐)';
+      if(hasExcl)msg+='\nNote: '+CASHBACK_EXCL_CATS.join(', ')+' products do not count toward the eligible order total.';
       msg+='\n\nLimited time offer — order now!';
       pt.textContent=msg;
     }
@@ -7912,8 +7935,41 @@ function renderCashbackProducts(){
   if(inp)inp.value=Math.round(FEATURED_CB_MIN_PCT*100);
   const disp=document.getElementById('featPctDisplay');
   if(disp)disp.textContent=Math.round(FEATURED_CB_MIN_PCT*100)+'%';
+  // Build excluded category toggles
+  renderExclCatChips();
   renderFeatCbList();
   renderFeatCbSearchResults('');
+}
+
+function renderExclCatChips(){
+  const el=document.getElementById('exclCatChips');if(!el)return;
+  const cats=[...new Set(PRODUCTS.map(p=>p.brand||p.cat).filter(Boolean))].sort();
+  el.innerHTML=cats.map(cat=>{
+    const on=CASHBACK_EXCL_CATS.includes(cat);
+    return '<button onclick="toggleExclCat(\''+cat.replace(/'/g,'')+'\')" style="padding:7px 14px;border-radius:20px;border:1.5px solid '+(on?'var(--red)':'var(--b2)')+';background:'+(on?'rgba(220,53,69,.10)':'var(--s2)')+';color:'+(on?'var(--red)':'var(--t2)')+';font-size:12px;font-weight:'+(on?'700':'500')+';cursor:pointer;font-family:inherit">'
+      +(on?'✕ ':'')+cat+'</button>';
+  }).join('');
+  const note=document.getElementById('exclCatNote');
+  if(note){
+    if(CASHBACK_EXCL_CATS.length){
+      note.textContent='Excluded: '+CASHBACK_EXCL_CATS.join(', ')+'. These product values are not counted toward the LKR 100k/200k threshold or the '+Math.round(FEATURED_CB_MIN_PCT*100)+'% featured rule.';
+      note.style.color='var(--red)';note.style.fontWeight='600';
+    } else {
+      note.textContent='No categories excluded. All products count toward the cashback-eligible total.';
+      note.style.color='var(--t3)';note.style.fontWeight='400';
+    }
+  }
+}
+
+async function toggleExclCat(cat){
+  if(CASHBACK_EXCL_CATS.includes(cat)){
+    CASHBACK_EXCL_CATS=CASHBACK_EXCL_CATS.filter(c=>c!==cat);
+  } else {
+    CASHBACK_EXCL_CATS.push(cat);
+  }
+  renderExclCatChips();
+  await saveConfigToDB('cashback_excl_cats',CASHBACK_EXCL_CATS);
+  showToast(CASHBACK_EXCL_CATS.length?'Excluded: '+CASHBACK_EXCL_CATS.join(', '):'All categories included','info');
 }
 
 function setFeatCbCat(cat,el){
@@ -8000,13 +8056,18 @@ function removeFeatCb(pid){
 function checkFeatCbEligibility(cart){
   // cart = {productId: qty, ...}
   const ids=Object.keys(cart).filter(id=>cart[id]>0);
-  if(!ids.length)return{eligible:false,featTotal:0,total:0,featPct:0};
-  const total=ids.reduce((s,id)=>{const p=PRODUCTS.find(x=>x.id==id);return s+(p?p.base*cart[id]:0);},0);
-  const featTotal=ids.filter(id=>FEATURED_CB_PRODUCTS.includes(Number(id))).reduce((s,id)=>{const p=PRODUCTS.find(x=>x.id==id);return s+(p?p.base*cart[id]:0);},0);
-  const featPct=total>0?featTotal/total:0;
+  if(!ids.length)return{eligible:false,featTotal:0,total:0,eligibleTotal:0,featPct:0};
+  const grossTotal=ids.reduce((s,id)=>{const p=PRODUCTS.find(x=>x.id==id);return s+(p?p.base*cart[id]:0);},0);
+  // Eligible total excludes products in excluded categories
+  const eligibleIds=CASHBACK_EXCL_CATS.length
+    ?ids.filter(id=>{const p=PRODUCTS.find(x=>x.id==id);return p&&!CASHBACK_EXCL_CATS.includes(p.brand||p.cat);})
+    :ids;
+  const eligibleTotal=eligibleIds.reduce((s,id)=>{const p=PRODUCTS.find(x=>x.id==id);return s+(p?p.base*cart[id]:0);},0);
+  const featTotal=eligibleIds.filter(id=>FEATURED_CB_PRODUCTS.includes(Number(id))).reduce((s,id)=>{const p=PRODUCTS.find(x=>x.id==id);return s+(p?p.base*cart[id]:0);},0);
+  const featPct=eligibleTotal>0?featTotal/eligibleTotal:0;
   const meetsMinPct=featPct>=FEATURED_CB_MIN_PCT;
-  const tier=total>=200000&&meetsMinPct?{pct:0.15,label:'15%'}:total>=100000&&meetsMinPct?{pct:0.12,label:'12%'}:null;
-  return{eligible:!!tier,featTotal,total,featPct,tier,meetsMinPct,needMore:Math.max(0,FEATURED_CB_MIN_PCT*total-featTotal)};
+  const tier=eligibleTotal>=200000&&meetsMinPct?{pct:0.15,label:'15%'}:eligibleTotal>=100000&&meetsMinPct?{pct:0.12,label:'12%'}:null;
+  return{eligible:!!tier,featTotal,total:grossTotal,eligibleTotal,featPct,tier,meetsMinPct,needMore:Math.max(0,FEATURED_CB_MIN_PCT*eligibleTotal-featTotal)};
 }
 
 // ══ MOBILE ══ WHATSAPP NOTIFICATIONS ══
