@@ -1288,13 +1288,38 @@ tr:hover td{background:var(--s2)}
       </div>
     </div>
 
+    <!-- PRICE TIERS CONFIG -->
+    <div class="card" style="margin-bottom:16px;border-left:3px solid var(--blue)">
+      <div class="ch">
+        <div>
+          <h3>💲 Price Tiers</h3>
+          <div style="font-size:11px;color:var(--t3);font-weight:400;margin-top:2px">Define your price levels — these map to columns in your Chart360 inventory export</div>
+        </div>
+        <button class="btn btn-blue btn-sm" onclick="addPriceTierRow()">+ Add Tier</button>
+      </div>
+      <div class="cb">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.04em">Tier Name</div>
+          <div style="font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.04em">Applies To</div>
+          <div style="font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.04em">Chart360 Column</div>
+          <div></div>
+        </div>
+        <div id="priceTierRows"></div>
+        <div style="font-size:11px;color:var(--t3);margin-top:10px;line-height:1.6">
+          ⓘ "Applies To" sets which channel sees this price. On import, the portal reads the Chart360 column you name here and updates all matching products.
+        </div>
+        <button class="btn btn-blue" style="margin-top:12px" onclick="savePriceTiers()">💾 Save Price Tiers</button>
+        <span id="ptSaveMsg" style="font-size:12px;margin-left:10px;display:none"></span>
+      </div>
+    </div>
+
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
 
       <!-- INVENTORY IMPORT -->
       <div class="card">
         <div class="ch"><h3>📦 Inventory Import</h3><span id="invImportBadge" class="badge bb" style="display:none"></span></div>
         <div class="cb">
-          <div style="font-size:12px;color:var(--t2);margin-bottom:12px">Updates stock quantities on all products in the portal. Expected columns: <strong>Product Name / SKU, Quantity, Cost Price</strong></div>
+          <div style="font-size:12px;color:var(--t2);margin-bottom:12px">Updates stock quantities and prices on all products. Expected columns: <strong>Product Name / SKU, Quantity</strong> + any price tier columns you configured above.</div>
 
           <!-- Drop zone -->
           <div id="invDropZone" onclick="document.getElementById('invFileInput').click()"
@@ -1324,6 +1349,10 @@ tr:hover td{background:var(--s2)}
               <div>
                 <label style="font-size:11px;color:var(--t3);display:block;margin-bottom:3px">Cost price column (optional)</label>
                 <select id="invColCost" style="width:100%;padding:7px 10px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:12px;font-family:inherit;background:var(--s2);color:var(--t);outline:none"><option value="">— None —</option></select>
+              </div>
+              <div style="grid-column:1/-1">
+                <label style="font-size:11px;color:var(--t3);display:block;margin-bottom:3px">💲 Selling price column (optional — updates rep order prices)</label>
+                <select id="invColPrice" style="width:100%;padding:7px 10px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:12px;font-family:inherit;background:var(--s2);color:var(--t);outline:none"><option value="">— None —</option></select>
               </div>
             </div>
             <button class="btn btn-blue" style="margin-top:10px;width:100%" onclick="previewInvImport()">Preview Import</button>
@@ -3011,6 +3040,7 @@ async function loadConfigFromDB(){
         if(row.key==='invoice_counter'&&val)INVOICE_COUNTER=Number(val)||1;
         if(row.key==='payment_edit_passcode'&&val)PAYMENT_EDIT_PASSCODE=val;
         if(row.key==='cashback_excl_cats'&&Array.isArray(val))CASHBACK_EXCL_CATS=val;
+        if(row.key==='price_tiers'&&Array.isArray(val)&&val.length)PRICE_TIERS=val;
       }catch(e){}
     });
     console.log('Config loaded from DB');
@@ -4187,6 +4217,11 @@ let PRICE_LISTS=[
 // Auto-applied based on qty ordered
 
 // ── Featured Cashback Products ──
+// Price tiers: [{name:'Distributor Price', appliesTo:'dist', col360:'Dist Price'}, ...]
+let PRICE_TIERS=[
+  {name:'Distributor Price',appliesTo:'dist',col360:''},
+  {name:'Rep Price',appliesTo:'rep',col360:''}
+];
 let FEATURED_CB_PRODUCTS=[]; // array of product IDs chosen by admin
 let FEATURED_CB_MIN_PCT=0.30; // minimum % of order from featured products
 let featCbCatFilter='all'; // category filter for the featured products picker
@@ -5851,6 +5886,55 @@ let repCSVData = null;
 
 function renderImportPage(){
   renderImportHistory();
+  renderPriceTierRows();
+}
+
+// ── PRICE TIERS ──
+const PT_APPLIES=[
+  {k:'dist',l:'All Distributors'},
+  {k:'rushaid',l:'Distributor — Rushaid'},
+  {k:'ziya',l:'Distributor — Ziya'},
+  {k:'shafeek',l:'Distributor — Shafeek'},
+  {k:'fawzan',l:'Distributor — Fawzan'},
+  {k:'rep',l:'All Reps'},
+  {k:'retail',l:'Retail / Walk-in'}
+];
+function renderPriceTierRows(){
+  const el=document.getElementById('priceTierRows');if(!el)return;
+  if(!PRICE_TIERS.length){el.innerHTML='<div style="font-size:12px;color:var(--t3);padding:8px 0">No tiers yet. Click + Add Tier.</div>';return;}
+  el.innerHTML=PRICE_TIERS.map((t,i)=>`
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:center">
+      <input value="${t.name}" oninput="PRICE_TIERS[${i}].name=this.value"
+        style="padding:7px 10px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:12px;font-family:inherit;background:var(--s2);color:var(--t);outline:none">
+      <select onchange="PRICE_TIERS[${i}].appliesTo=this.value"
+        style="padding:7px 10px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:12px;font-family:inherit;background:var(--s2);color:var(--t);outline:none">
+        ${PT_APPLIES.map(a=>`<option value="${a.k}"${t.appliesTo===a.k?' selected':''}>${a.l}</option>`).join('')}
+      </select>
+      <input value="${t.col360||''}" placeholder="Chart360 column name" oninput="PRICE_TIERS[${i}].col360=this.value"
+        style="padding:7px 10px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:12px;font-family:inherit;background:var(--s2);color:var(--t);outline:none">
+      <button onclick="PRICE_TIERS.splice(${i},1);renderPriceTierRows()" style="padding:6px 10px;border:none;border-radius:var(--rs);background:var(--red-bg);color:var(--red);cursor:pointer;font-size:13px">✕</button>
+    </div>`).join('');
+}
+function addPriceTierRow(){
+  PRICE_TIERS.push({name:'',appliesTo:'rep',col360:''});
+  renderPriceTierRows();
+}
+async function savePriceTiers(){
+  await saveConfigToDB('price_tiers',PRICE_TIERS);
+  const msg=document.getElementById('ptSaveMsg');
+  if(msg){msg.style.display='inline';msg.style.color='var(--green)';msg.textContent='✅ Saved';setTimeout(()=>msg.style.display='none',2500);}
+}
+function applyTierPrices(prod,row){
+  // Apply each configured price tier from the CSV row
+  PRICE_TIERS.forEach(t=>{
+    if(!t.col360||!row[t.col360])return;
+    const price=parseFloat(String(row[t.col360]).replace(/[^0-9.]/g,''))||0;
+    if(!price)return;
+    if(t.appliesTo==='rep'){prod.base=price;Object.keys(prod.prices||{}).forEach(k=>prod.prices[k]=price);}
+    else if(t.appliesTo==='dist'){Object.keys(prod.prices||{}).forEach(k=>prod.prices[k]=price);}
+    else if(prod.prices&&prod.prices[t.appliesTo]!==undefined){prod.prices[t.appliesTo]=price;}
+    else if(t.appliesTo==='retail'){prod.retailPrice=price;}
+  });
 }
 
 // ── CSV Parser ──
@@ -5882,6 +5966,11 @@ function populateSels(headers,required,optional){
   optional.forEach(id=>{
     const s=document.getElementById(id);if(!s)return;
     s.innerHTML='<option value="">— Optional —</option>'+headers.map(h=>`<option value="${h}">${h}</option>`).join('');
+    const lh=headers.map(h=>h.toLowerCase());
+    if(id.includes('Cost')){const i=lh.findIndex(h=>h.includes('cost'));if(i>=0)s.value=headers[i];}
+    if(id.includes('Price')){const i=lh.findIndex(h=>h.includes('price')||h.includes('selling')||h.includes('unit price')||h.includes('sale price'));if(i>=0)s.value=headers[i];}
+    if(id.includes('SKU')||id.includes('sku')){const i=lh.findIndex(h=>h.includes('sku')||h.includes('code')||h.includes('ref'));if(i>=0)s.value=headers[i];}
+    if(id.includes('Date')||id.includes('date')){const i=lh.findIndex(h=>h.includes('date'));if(i>=0)s.value=headers[i];}
   });
 }
 
@@ -5894,7 +5983,7 @@ function handleInvFile(input,prefix){
     const mapping=document.getElementById((p?'wInv':'inv')+'Mapping');
     if(mapping)mapping.style.display='block';
     const prefix2=p?'wInvCol':'invCol';
-    populateSels(invCSVData.headers,[prefix2+'Name',prefix2+'Qty'],[prefix2+(p?'':'SKU'),prefix2+(p?'':'Cost')]);
+    populateSels(invCSVData.headers,[prefix2+'Name',prefix2+'Qty'],[prefix2+(p?'':'SKU'),prefix2+(p?'':'Cost'),prefix2+(p?'':'Price')]);
     const dz=document.getElementById((p?'wInv':'inv')+'Drop');
     if(dz){dz.style.borderColor='var(--blue)';dz.style.background='var(--blue-bg)';dz.innerHTML=`<div style="font-size:20px;margin-bottom:5px">✅</div><div style="font-size:13px;font-weight:600;color:var(--blue)">${file.name}</div><div style="font-size:11px;color:var(--t3);margin-top:3px">${invCSVData.rows.length} rows detected</div>`;}
     const badge=document.getElementById((p?'wInv':'invImport')+'Badge');
@@ -5937,18 +6026,27 @@ function confirmInvImport(prefix){
   const nameCol=document.getElementById(pre2+'Name').value;
   const qtyCol=document.getElementById(pre2+'Qty').value;
   const costCol=document.getElementById(pre2+(p?'':'Cost'))?.value||'';
-  let updated=0;
+  const priceCol=document.getElementById(pre2+(p?'':'Price'))?.value||'';
+  let updated=0,priceUpdated=0;
   invCSVData.rows.filter(r=>r[nameCol]).forEach(r=>{
     const name=r[nameCol].trim();
     const qty=parseInt(r[qtyCol])||0;
     const cost=costCol?parseFloat(r[costCol])||0:0;
+    const price=priceCol?parseFloat(String(r[priceCol]).replace(/[^0-9.]/g,''))||0:0;
     const prod=PRODUCTS.find(x=>x.name.toLowerCase().includes(name.toLowerCase())||name.toLowerCase().includes(x.name.toLowerCase().slice(0,8)));
     if(prod){
       prod.avail=qty>10?'in':qty>0?'low':'out';
       prod.stockQty=qty;
       if(cost>0)prod.costPrice=cost;
+      if(price>0){
+        prod.base=price;
+        Object.keys(prod.prices||{}).forEach(k=>prod.prices[k]=price);
+        priceUpdated++;
+      }
+      // Apply configured price tiers from CSV
+      applyTierPrices(prod,r);
       // Save to Supabase
-      dbUpdate('products',{avail:prod.avail,stock_qty:qty,cost_price:cost||prod.costPrice||0},{id:prod.id});
+      dbUpdate('products',{avail:prod.avail,stock_qty:qty,cost_price:cost||prod.costPrice||0,base_price:prod.base||0,prices:prod.prices},{id:prod.id});
       updated++;
     }
     const slow=SLOW_STOCK.find(x=>x.name.toLowerCase().includes(name.toLowerCase())||name.toLowerCase().includes(x.name.toLowerCase().slice(0,8)));
@@ -5956,7 +6054,7 @@ function confirmInvImport(prefix){
   });
   const now=new Date().toLocaleString('en-GB',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
   importHistory.unshift({time:now,type:'📦 Inventory',records:updated,status:'✅ Success'});
-  showImportMsg('inv',`✅ ${updated} products updated — stock levels refreshed.`,'var(--green)',p);
+  showImportMsg('inv',`✅ ${updated} products updated — stock levels refreshed${priceUpdated>0?', '+priceUpdated+' prices updated from Chart360':''}.`,'var(--green)',p);
   const prevEl=document.getElementById((p?'wInv':'inv')+'Preview');if(prevEl)prevEl.style.display='none';
   renderImportHistory();
   invCSVData=null;
