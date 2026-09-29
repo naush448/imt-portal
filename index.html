@@ -4453,6 +4453,7 @@ function goto(id,el){
   document.getElementById('pgTitle').textContent=pt;
   const mobTitle=document.getElementById('mobTitle');
   if(mobTitle)mobTitle.textContent=pt;
+  if(id==='p-a-dash'){loadOrdersFromDB().then(()=>{renderPendingOrders();});}
   if(id==='p-a-dists'){loadOrdersFromDB().then(()=>{renderAdminDistGrid();renderDistOrders();});}
   if(id==='p-a-distdiscount')renderDistDiscountPage();
   if(id==='p-a-reps'){loadOrdersFromDB().then(()=>{renderAdminRepTable();renderRepOrders();renderCbReport();});}
@@ -4661,7 +4662,7 @@ function renderPendingOrders(){
         }
         html+='<div style="padding:12px 18px;border-bottom:0.5px solid var(--b)">'
           +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">'
-            +'<div><div style="display:flex;align-items:center;gap:8px;margin-bottom:3px"><span style="font-size:13px;font-weight:700">'+o.id+'</span><span class="badge bt" style="font-size:10px">Pending</span></div>'
+            +'<div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px"><span style="font-size:13px;font-weight:700">'+o.id+'</span><span class="badge bt" style="font-size:10px">Pending</span>'+(o.cashbackEligible?'<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:var(--teal-bg);color:var(--teal)">💰 '+((o.cashbackTier&&o.cashbackTier.label)||'')+' Cashback — LKR '+(o.cashbackAmount||0).toLocaleString()+'</span>':'')+'</div>'
             +'<div style="font-size:12px;color:var(--t2)">'+o.repName+' to '+o.custName+'</div>'
             +'<div style="font-size:11px;color:var(--t3)">'+o.date+'</div>'+(o.note?'<div style="font-size:11px;color:var(--t3)">Note: '+o.note+'</div>':'')+'</div>'
             +'<div style="text-align:right;flex-shrink:0"><div style="font-size:16px;font-weight:700;color:var(--teal)">'+fmt(o.total)+'</div><div style="font-size:10px;color:var(--t3)">'+oit.length+' items</div></div>'
