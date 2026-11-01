@@ -629,6 +629,11 @@ tr:hover td{background:var(--s2)}
       <div class="kpi"><div class="kpi-l">Reps Hit Target</div><div class="kpi-v c-green" id="repsHit">—</div></div>
       <div class="kpi"><div class="kpi-l">Total Customers</div><div class="kpi-v c-teal" id="totalCusts">—</div></div>
     </div>
+    <!-- Rep Monthly Charts -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="ch"><h3>📊 Monthly Performance — Per Rep</h3><span style="font-size:11px;color:var(--t3)">Last 6 months from orders</span></div>
+      <div id="repChartsGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;padding:4px 0"></div>
+    </div>
     <div class="card">
       <div class="ch"><h3>All sales reps — September performance</h3></div>
       <table><thead><tr><th>Rep</th><th>Region</th><th>Customers</th><th>September Sales</th><th>Target</th><th>Progress</th><th>Commission</th><th>Status</th></tr></thead>
@@ -4860,6 +4865,7 @@ function renderAdminRepTable(){
   if(document.getElementById('teamComm'))document.getElementById('teamComm').textContent=fmt(teamComm);
   if(document.getElementById('repsHit'))document.getElementById('repsHit').textContent=repsHit+' / '+Object.keys(REPS).length;
   if(document.getElementById('totalCusts'))document.getElementById('totalCusts').textContent=Object.keys(CUSTOMERS).length;
+  renderRepCharts();
   const tb=document.getElementById('aRepTable');if(!tb)return;
   tb.innerHTML=Object.values(REPS).map(r=>{
     const pct=r.juneS/r.target*100;
@@ -4867,6 +4873,77 @@ function renderAdminRepTable(){
     const comm=r.juneS>=r.target?Math.round(r.juneS*COMM_CONFIG.pct):0;
     const custs=r.custKeys.length;
     return `<tr><td><strong>${r.name}</strong></td><td>${r.region}</td><td>${custs}</td><td style="font-weight:600">${fmt(r.juneS)}</td><td>${fmt(r.target)}</td><td><div style="display:flex;align-items:center;gap:6px"><div class="pb" style="width:80px;height:6px;margin:0;display:inline-block"><div class="pf" style="width:${Math.min(pct,100)}%;background:${col}"></div></div><span style="font-size:11px;font-weight:600;color:${col}">${pct.toFixed(0)}%</span></div></td><td style="font-weight:600;color:${comm>0?'var(--green)':'var(--t3)'}">${comm>0?fmt(comm):'Not earned'}</td><td><span class="badge ${r.juneS>=r.target?'bg':'ba'}">${r.juneS>=r.target?'✅ Hit target':'In progress'}</span></td></tr>`;
+  }).join('');
+}
+
+function renderRepCharts(){
+  const el=document.getElementById('repChartsGrid');if(!el)return;
+  // Build last 6 months list
+  const now=new Date();
+  const months=[];
+  for(let i=5;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    months.push({key:d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'),
+      label:d.toLocaleString('default',{month:'short'})});
+  }
+  // Aggregate REP_ORDERS by repName + month
+  const byRep={};
+  REP_ORDERS.forEach(o=>{
+    if(!o.repName||!o.date)return;
+    const mk=o.date.slice(0,7); // YYYY-MM
+    if(!byRep[o.repName])byRep[o.repName]={};
+    byRep[o.repName][mk]=(byRep[o.repName][mk]||0)+(o.total||0);
+  });
+  // Also include reps from REPS object
+  const repNames=Object.values(REPS).filter(r=>r.name&&r.custKeys&&r.custKeys.length>0).map(r=>r.name);
+  // Unique reps that have orders
+  const activeReps=[...new Set([...Object.keys(byRep),...repNames])];
+  if(!activeReps.length){el.innerHTML='<div style="color:var(--t3);font-size:13px;padding:8px">No order data yet</div>';return;}
+  const CHART_H=70,BAR_W=28,BAR_GAP=6;
+  const svgW=months.length*(BAR_W+BAR_GAP)-BAR_GAP+40;
+  el.innerHTML=activeReps.map(repName=>{
+    const data=months.map(m=>(byRep[repName]||{})[m.key]||0);
+    const maxV=Math.max(...data,1);
+    const total=data.reduce((a,b)=>a+b,0);
+    const repKey=Object.keys(REPS).find(k=>REPS[k].name===repName)||'';
+    const rep=REPS[repKey]||{};
+    const curSales=rep.juneS||data[data.length-1]||0;
+    const target=rep.target||1000000;
+    const pct=Math.min(curSales/target*100,100);
+    const col=curSales>=target?'#16a34a':curSales>=500000?'#d97706':'#dc2626';
+    const bars=data.map((v,i)=>{
+      const bh=v>0?Math.max(Math.round(v/maxV*CHART_H),4):2;
+      const x=20+i*(BAR_W+BAR_GAP);
+      const y=CHART_H-bh+10;
+      const isCur=i===data.length-1;
+      const fill=isCur?'var(--teal)':'var(--b2)';
+      const lbl=months[i].label;
+      const valK=v>=1000?(v/1000).toFixed(0)+'k':'0';
+      return `<g>
+        <rect x="${x}" y="${y}" width="${BAR_W}" height="${bh}" rx="3" fill="${fill}" opacity="${isCur?1:.7}"/>
+        ${v>0?`<text x="${x+BAR_W/2}" y="${y-3}" text-anchor="middle" font-size="9" fill="var(--t2)">${valK}</text>`:''}
+        <text x="${x+BAR_W/2}" y="${CHART_H+22}" text-anchor="middle" font-size="9" fill="var(--t3)">${lbl}</text>
+      </g>`;
+    }).join('');
+    return `<div style="background:var(--s2);border-radius:var(--rs);padding:12px 14px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--t)">${repName}</div>
+          <div style="font-size:10px;color:var(--t3)">${rep.region||'Rep channel'}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:13px;font-weight:700;color:${col}">LKR ${(curSales/1000).toFixed(0)}k</div>
+          <div style="font-size:10px;color:var(--t3)">${pct.toFixed(0)}% of target</div>
+        </div>
+      </div>
+      <svg width="${svgW}" height="${CHART_H+30}" style="overflow:visible;display:block">${bars}</svg>
+      <div style="margin-top:6px">
+        <div style="height:4px;background:var(--b2);border-radius:2px;overflow:hidden">
+          <div style="height:4px;width:${pct}%;background:${col};border-radius:2px;transition:width .4s"></div>
+        </div>
+        <div style="font-size:10px;color:var(--t3);margin-top:3px">6-month total: LKR ${(total/1000).toFixed(0)}k</div>
+      </div>
+    </div>`;
   }).join('');
 }
 
