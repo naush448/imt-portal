@@ -2688,6 +2688,11 @@ Please log in to the portal to approve or reject.</div>
           <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px"><span style="color:var(--t2)">Invoice total</span><span style="font-size:18px;font-weight:800;color:var(--teal)" id="piTotal">LKR 0</span></div>
           <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--t3)"><span>Items removed/adjusted from original order will not be invoiced</span></div>
         </div>
+        <!-- IMEI Section -->
+        <div id="piImeiSection" style="margin-bottom:14px;display:none">
+          <div style="font-size:12px;font-weight:600;color:var(--t2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">📱 IMEI Numbers</div>
+          <div id="piImeiList"></div>
+        </div>
         <!-- Note -->
         <div style="margin-bottom:16px">
           <label style="font-size:11px;font-weight:600;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">Note (optional)</label>
@@ -7449,8 +7454,63 @@ function renderPiItems(){
   }
   el.innerHTML=html;
   updatePiTotal();
+  renderPiImei();
 }
 function piToggleItem(i){piItems[i].active=!piItems[i].active;renderPiItems();}
+
+function renderPiImei(){
+  const section=document.getElementById('piImeiSection');
+  const list=document.getElementById('piImeiList');
+  if(!section||!list)return;
+  const active=piItems.filter(it=>it.active&&it.qty>0);
+  if(!active.length){section.style.display='none';return;}
+  section.style.display='block';
+  list.innerHTML=active.map((it,ai)=>{
+    // one input per unit for qty<=3, else one textarea for comma-sep
+    const idx=piItems.indexOf(it);
+    if(it.qty<=4){
+      let inputs='';
+      for(let u=0;u<it.qty;u++){
+        inputs+=`<input type="text" inputmode="numeric" placeholder="IMEI ${u+1}"
+          id="imei_${idx}_${u}"
+          style="width:100%;padding:8px 10px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:13px;font-family:inherit;background:var(--s2);color:var(--t);outline:none;margin-bottom:5px"
+          maxlength="17">`;
+      }
+      return `<div style="padding:10px 12px;background:var(--s2);border-radius:var(--rs);margin-bottom:8px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--t)">${it.name} <span style="color:var(--t3);font-weight:400">× ${it.qty}</span></div>
+        ${inputs}
+      </div>`;
+    } else {
+      return `<div style="padding:10px 12px;background:var(--s2);border-radius:var(--rs);margin-bottom:8px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--t)">${it.name} <span style="color:var(--t3);font-weight:400">× ${it.qty}</span></div>
+        <textarea id="imei_${idx}_bulk" rows="3" placeholder="Enter IMEIs — one per line or comma-separated (${it.qty} expected)"
+          style="width:100%;padding:8px 10px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:12px;font-family:inherit;background:var(--s2);color:var(--t);outline:none;resize:vertical"></textarea>
+      </div>`;
+    }
+  }).join('');
+}
+
+function collectPiImeis(){
+  // Returns array matching piItems order: item.imeis = [] or [str,...]
+  const active=piItems.filter(it=>it.active&&it.qty>0);
+  active.forEach(it=>{
+    const idx=piItems.indexOf(it);
+    let imeis=[];
+    if(it.qty<=4){
+      for(let u=0;u<it.qty;u++){
+        const el=document.getElementById('imei_'+idx+'_'+u);
+        const v=(el?el.value:'').trim();
+        if(v)imeis.push(v);
+      }
+    } else {
+      const el=document.getElementById('imei_'+idx+'_bulk');
+      const raw=(el?el.value:'').trim();
+      if(raw)imeis=raw.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean);
+    }
+    it.imeis=imeis;
+  });
+}
+
 function piUpdateQty(i,val){
   const q=parseInt(val)||0;
   piItems[i].qty=Math.max(0,Math.min(q,piItems[i]._origQty||piItems[i].qty));
@@ -7468,6 +7528,7 @@ function confirmProcessInvoice(){
   if(!piCurrentOrder)return;
   const activeItems=piItems.filter(it=>it.active&&it.qty>0);
   if(!activeItems.length){showToast('At least one item must be included.','warning');return;}
+  collectPiImeis();
   const total=activeItems.reduce((s,it)=>s+(it.price||0)*it.qty,0);
   const isRep=!!piCurrentOrder.repName;
   const custKey=piCurrentOrder.custKey||null;
@@ -7480,7 +7541,7 @@ function confirmProcessInvoice(){
     custKey,custName,
     repKey:piCurrentOrder.repKey||null,
     repName:piCurrentOrder.repName||null,
-    items:activeItems.map(it=>({name:it.name,sku:it.sku||'',qty:it.qty,unitPrice:it.price||0,total:(it.price||0)*it.qty})),
+    items:activeItems.map(it=>({name:it.name,sku:it.sku||'',qty:it.qty,unitPrice:it.price||0,total:(it.price||0)*it.qty,imeis:it.imeis||[]})),
     subtotal:total,total,
     date:now.toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'}),
     createdAt:now.toISOString(),
@@ -7820,7 +7881,13 @@ function printInvoice(invId){
     +'</div>'
     +(outstanding>0?'<div class="outstanding">⚠️ <strong>Previous balance (before this invoice):</strong> LKR '+outstanding.toLocaleString()+'</div>':'')
     +'<table><thead><tr><th>#</th><th>Description</th><th>SKU</th><th style="text-align:right">Unit Price</th><th style="text-align:center">Qty</th><th style="text-align:right">Amount</th></tr></thead>'
-    +'<tbody>'+inv.items.map(function(it,i){return '<tr><td>'+(i+1)+'</td><td>'+it.name+'</td><td style="color:#888">'+it.sku+'</td><td style="text-align:right">LKR '+it.unitPrice.toLocaleString()+'</td><td style="text-align:center">'+it.qty+'</td><td style="text-align:right">LKR '+it.total.toLocaleString()+'</td></tr>';}).join('')+'</tbody>'
+    +'<tbody>'+inv.items.map(function(it,i){
+      var imeiRow='';
+      if(it.imeis&&it.imeis.length){
+        imeiRow='<tr><td colspan="6" style="padding:3px 8px 7px;font-size:10px;color:#555;background:#f9f9f9">📱 IMEI: '+it.imeis.join(' · ')+'</td></tr>';
+      }
+      return '<tr><td>'+(i+1)+'</td><td>'+it.name+'</td><td style="color:#888">'+it.sku+'</td><td style="text-align:right">LKR '+it.unitPrice.toLocaleString()+'</td><td style="text-align:center">'+it.qty+'</td><td style="text-align:right">LKR '+it.total.toLocaleString()+'</td></tr>'+imeiRow;
+    }).join('')+'</tbody>'
     +'<tfoot>'
     +'<tr style="background:#f5f5f5"><td colspan="4" style="text-align:right;font-size:12px;color:#555;padding:6px 8px">Total Qty Invoiced</td><td style="text-align:center;font-weight:700;padding:6px 8px">'+inv.items.reduce(function(s,it){return s+it.qty;},0)+'</td><td style="padding:6px 8px"></td></tr>'
     +'<tr class="total-row"><td colspan="5" style="text-align:right">INVOICE TOTAL</td><td style="text-align:right">LKR '+inv.total.toLocaleString()+'</td></tr>'
