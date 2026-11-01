@@ -2536,6 +2536,78 @@ Please log in to the portal to approve or reject.</div>
     </div>
   </div>
 
+  <!-- ═══════════════ PURCHASE ORDERS (ADMIN) ═══════════════ -->
+  <div class="page" id="p-a-purchaseorders">
+    <div class="krow">
+      <div class="kpi"><div class="kpi-l">Open POs</div><div class="kpi-v c-amber" id="poKpiOpen">0</div></div>
+      <div class="kpi"><div class="kpi-l">Received This Month</div><div class="kpi-v c-green" id="poKpiMonth">0</div></div>
+      <div class="kpi"><div class="kpi-l">Total POs</div><div class="kpi-v c-teal" id="poKpiTotal">0</div></div>
+    </div>
+    <button onclick="openNewPOModal()" style="width:100%;padding:13px;background:var(--teal);color:#fff;border:none;border-radius:var(--r);font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-bottom:16px">+ New Purchase Order</button>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <select id="poStatusFilter" onchange="renderPOList()" style="padding:10px 12px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:13px;font-family:inherit;background:var(--s2);color:var(--t);outline:none">
+        <option value="all">All Status</option>
+        <option value="Pending">Pending</option>
+        <option value="Ordered">Ordered</option>
+        <option value="Received">Received</option>
+      </select>
+    </div>
+    <div class="card">
+      <div class="ch"><h3>Purchase Orders</h3><span class="badge bb" id="poListCount">0</span></div>
+      <div id="poList"><div style="text-align:center;padding:32px;color:var(--t3);font-size:13px">No purchase orders yet.</div></div>
+    </div>
+  </div>
+
+  <!-- New PO Modal -->
+  <div id="newPOModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:flex-end;justify-content:center">
+    <div style="background:var(--s);border-radius:20px 20px 0 0;width:100%;max-width:600px;max-height:92vh;overflow-y:auto">
+      <div style="padding:16px 18px;border-bottom:0.5px solid var(--b);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--s);z-index:1">
+        <div style="font-size:16px;font-weight:700">📦 New Purchase Order</div>
+        <button onclick="closeNewPOModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--t3)">×</button>
+      </div>
+      <div style="padding:18px;display:grid;gap:14px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">Supplier Name *</label>
+          <input id="poSupplier" type="text" placeholder="e.g. Samsung Lanka Distributors" style="width:100%;padding:10px 12px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:14px;font-family:inherit;background:var(--s2);color:var(--t);outline:none">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">Expected Delivery Date</label>
+          <input id="poExpDelivery" type="date" style="width:100%;padding:10px 12px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:14px;font-family:inherit;background:var(--s2);color:var(--t);outline:none">
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--t2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Items to Order</div>
+          <div id="poItemsForm"></div>
+          <button onclick="addPOItem()" style="margin-top:6px;padding:8px 16px;background:none;border:1px dashed var(--b2);border-radius:var(--rs);font-size:13px;cursor:pointer;font-family:inherit;color:var(--t2);width:100%">+ Add Item</button>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">Notes</label>
+          <textarea id="poNotes" rows="2" placeholder="e.g. Rush order — warehouse running low on Galaxy A series" style="width:100%;padding:10px 12px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:13px;font-family:inherit;resize:none;background:var(--s2);color:var(--t);outline:none"></textarea>
+        </div>
+        <button onclick="confirmNewPO()" style="width:100%;padding:14px;background:var(--teal);color:#fff;border:none;border-radius:var(--rs);font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">📦 Create Purchase Order</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Receive PO Modal -->
+  <div id="receivePOModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center;padding:16px">
+    <div style="background:var(--s);border-radius:var(--r);width:100%;max-width:500px;max-height:90vh;overflow-y:auto">
+      <div style="padding:16px 18px;border-bottom:0.5px solid var(--b);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--s)">
+        <div style="font-size:16px;font-weight:700">✅ Receive Delivery</div>
+        <button onclick="document.getElementById('receivePOModal').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--t3)">×</button>
+      </div>
+      <div style="padding:18px">
+        <div id="receivePOInfo" style="background:var(--s2);border-radius:var(--rs);padding:12px 14px;margin-bottom:14px;font-size:13px"></div>
+        <div style="font-size:12px;font-weight:600;color:var(--t2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Confirm Quantities Received</div>
+        <div id="receivePOItems" style="margin-bottom:14px"></div>
+        <div style="margin-bottom:14px">
+          <label style="font-size:11px;font-weight:600;color:var(--t2);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em">Delivery Note / Reference</label>
+          <input id="receivePORef" type="text" placeholder="e.g. DN-2025-1042" style="width:100%;padding:10px 12px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:14px;font-family:inherit;background:var(--s2);color:var(--t);outline:none">
+        </div>
+        <button onclick="confirmReceivePO()" style="width:100%;padding:14px;background:var(--green,#16a34a);color:#fff;border:none;border-radius:var(--rs);font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">✅ Confirm Receipt & Update Stock</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ═══════════════ RECORD PAYMENT (WAREHOUSE) ═══════════════ -->
   <div class="page" id="p-w-payments">
     <div class="krow">
@@ -4210,6 +4282,170 @@ let PAYMENT_AUDIT_LOG=[]; // {id,paymentId,action,originalData,newData,changedBy
 let PAYMENT_EDIT_PASSCODE='1234'; // changeable in admin settings
 let PAYMENTS=[]; // {id,custKey,custName,amount,method,ref,date,note,recordedBy,createdAt}
 
+// ── Purchase Orders ──
+let PO_ORDERS=[]; // {id,supplier,items:[{name,sku,qty,unitCost}],expectedDelivery,notes,status,createdAt,receivedAt,deliveryRef}
+let poItemDrafts=[{name:'',sku:'',qty:1,unitCost:0}];
+let poReceivingId=null;
+
+function nextPOId(){
+  const nums=PO_ORDERS.map(p=>parseInt((p.id||'PO-0').replace('PO-',''))||0);
+  return 'PO-'+(Math.max(0,...nums)+1).toString().padStart(3,'0');
+}
+
+function renderPOPage(){
+  const open=PO_ORDERS.filter(p=>p.status!=='Received').length;
+  const now=new Date();
+  const monthStr=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const monthRec=PO_ORDERS.filter(p=>p.status==='Received'&&(p.receivedAt||'').startsWith(monthStr)).length;
+  if(document.getElementById('poKpiOpen'))document.getElementById('poKpiOpen').textContent=open;
+  if(document.getElementById('poKpiMonth'))document.getElementById('poKpiMonth').textContent=monthRec;
+  if(document.getElementById('poKpiTotal'))document.getElementById('poKpiTotal').textContent=PO_ORDERS.length;
+  renderPOList();
+}
+
+function renderPOList(){
+  const el=document.getElementById('poList');if(!el)return;
+  const filter=(document.getElementById('poStatusFilter')||{}).value||'all';
+  let list=PO_ORDERS;
+  if(filter!=='all')list=list.filter(p=>p.status===filter);
+  const badge=document.getElementById('poListCount');if(badge)badge.textContent=list.length;
+  if(!list.length){el.innerHTML='<div style="text-align:center;padding:32px;color:var(--t3);font-size:13px">No purchase orders match.</div>';return;}
+  const statusCol={Pending:'var(--amber)',Ordered:'var(--blue)',Received:'var(--green)'};
+  const statusBg={Pending:'var(--amber-bg)',Ordered:'var(--blue-bg)',Received:'var(--green-bg)'};
+  el.innerHTML=list.map(po=>{
+    const items=Array.isArray(po.items)?po.items:[];
+    const totalCost=items.reduce((s,it)=>s+(it.unitCost||0)*(it.qty||0),0);
+    const totalQty=items.reduce((s,it)=>s+(it.qty||0),0);
+    const col=statusCol[po.status]||'var(--t3)';
+    const bg=statusBg[po.status]||'var(--s2)';
+    return `<div style="border-bottom:0.5px solid var(--b);padding:14px 18px">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+            <span style="font-size:14px;font-weight:800;color:var(--teal)">${po.id}</span>
+            <span style="font-size:10px;padding:2px 8px;border-radius:20px;background:${bg};color:${col}">${po.status}</span>
+          </div>
+          <div style="font-size:13px;font-weight:600">${po.supplier}</div>
+          <div style="font-size:11px;color:var(--t3)">${po.createdAt||''} · ${items.length} SKU${items.length!==1?'s':''} · ${totalQty} units</div>
+          ${po.expectedDelivery?'<div style="font-size:11px;color:var(--t2)">Expected: '+po.expectedDelivery+'</div>':''}
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:14px;font-weight:700;color:var(--teal)">LKR ${totalCost.toLocaleString()}</div>
+          <div style="font-size:10px;color:var(--t3)">estimated cost</div>
+        </div>
+      </div>
+      <div style="background:var(--s2);border-radius:var(--rs);padding:8px 10px;margin-bottom:8px;font-size:12px">
+        ${items.map(it=>`<div style="display:flex;justify-content:space-between;padding:2px 0"><span>${it.name||'—'} <span style="color:var(--t3)">${it.sku?'('+it.sku+')':''}</span></span><span>×${it.qty} @ LKR ${(it.unitCost||0).toLocaleString()}</span></div>`).join('')}
+      </div>
+      ${po.notes?'<div style="font-size:11px;color:var(--t2);margin-bottom:8px">📝 '+po.notes+'</div>':''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${po.status!=='Received'?`<button onclick="openReceivePO('${po.id}')" style="padding:8px 16px;background:var(--green,#16a34a);color:#fff;border:none;border-radius:var(--rs);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">✅ Receive Delivery</button>`:'<span style="font-size:11px;color:var(--green)">✅ Received '+po.receivedAt+' · '+po.deliveryRef+'</span>'}
+        ${po.status==='Pending'?`<button onclick="markPOOrdered('${po.id}')" style="padding:8px 16px;background:var(--blue);color:#fff;border:none;border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">📤 Mark as Ordered</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openNewPOModal(){
+  poItemDrafts=[{name:'',sku:'',qty:1,unitCost:0}];
+  if(document.getElementById('poSupplier'))document.getElementById('poSupplier').value='';
+  if(document.getElementById('poExpDelivery'))document.getElementById('poExpDelivery').value='';
+  if(document.getElementById('poNotes'))document.getElementById('poNotes').value='';
+  renderPOItemsForm();
+  document.getElementById('newPOModal').style.display='flex';
+}
+function closeNewPOModal(){document.getElementById('newPOModal').style.display='none';}
+
+function renderPOItemsForm(){
+  const el=document.getElementById('poItemsForm');if(!el)return;
+  el.innerHTML=poItemDrafts.map((it,i)=>`
+    <div style="display:grid;grid-template-columns:1fr auto auto auto auto;gap:6px;margin-bottom:6px;align-items:center">
+      <input type="text" value="${it.name}" placeholder="Product name" oninput="poItemDrafts[${i}].name=this.value"
+        style="padding:8px 10px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:13px;font-family:inherit;background:var(--s2);color:var(--t);outline:none">
+      <input type="text" value="${it.sku}" placeholder="SKU" oninput="poItemDrafts[${i}].sku=this.value"
+        style="width:80px;padding:8px 10px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:13px;font-family:inherit;background:var(--s2);color:var(--t);outline:none">
+      <input type="number" min="1" value="${it.qty}" placeholder="Qty" oninput="poItemDrafts[${i}].qty=parseInt(this.value)||1"
+        style="width:60px;padding:8px 10px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:13px;font-family:inherit;background:var(--s2);color:var(--t);outline:none;text-align:center">
+      <input type="number" min="0" value="${it.unitCost}" placeholder="Cost" oninput="poItemDrafts[${i}].unitCost=parseFloat(this.value)||0"
+        style="width:90px;padding:8px 10px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:13px;font-family:inherit;background:var(--s2);color:var(--t);outline:none">
+      ${poItemDrafts.length>1?`<button onclick="poItemDrafts.splice(${i},1);renderPOItemsForm()" style="width:28px;height:28px;border:0.5px solid var(--red);border-radius:6px;background:none;cursor:pointer;font-size:16px;color:var(--red)">✕</button>`:'<div style="width:28px"></div>'}
+    </div>
+  `).join('')+'<div style="font-size:10px;color:var(--t3);margin-top:2px">Name · SKU · Qty · Unit Cost (LKR)</div>';
+}
+
+function addPOItem(){
+  poItemDrafts.push({name:'',sku:'',qty:1,unitCost:0});
+  renderPOItemsForm();
+}
+
+function confirmNewPO(){
+  const supplier=(document.getElementById('poSupplier').value||'').trim();
+  if(!supplier){showToast('Please enter a supplier name','warning');return;}
+  const validItems=poItemDrafts.filter(it=>it.name.trim()&&it.qty>0);
+  if(!validItems.length){showToast('Add at least one item','warning');return;}
+  const po={
+    id:nextPOId(),
+    supplier,
+    items:validItems.map(it=>({name:it.name.trim(),sku:it.sku.trim(),qty:it.qty,unitCost:it.unitCost})),
+    expectedDelivery:document.getElementById('poExpDelivery').value||'',
+    notes:(document.getElementById('poNotes').value||'').trim(),
+    status:'Pending',
+    createdAt:new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'})
+  };
+  PO_ORDERS.unshift(po);
+  closeNewPOModal();
+  renderPOPage();
+  showToast('Purchase Order '+po.id+' created ✓','success');
+}
+
+function markPOOrdered(poId){
+  const po=PO_ORDERS.find(p=>p.id===poId);if(!po)return;
+  po.status='Ordered';
+  renderPOList();
+  showToast(poId+' marked as Ordered','success');
+}
+
+function openReceivePO(poId){
+  const po=PO_ORDERS.find(p=>p.id===poId);if(!po)return;
+  poReceivingId=poId;
+  const items=Array.isArray(po.items)?po.items:[];
+  document.getElementById('receivePOInfo').innerHTML=
+    '<div style="font-size:11px;color:var(--t3)">PO · Supplier</div>'
+    +'<div style="font-size:14px;font-weight:700">'+po.id+' — '+po.supplier+'</div>';
+  document.getElementById('receivePORef').value='';
+  document.getElementById('receivePOItems').innerHTML=items.map((it,i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:0.5px solid var(--b);border-radius:var(--rs);margin-bottom:6px;background:var(--s)">
+      <div style="flex:1"><div style="font-size:13px;font-weight:500">${it.name}</div><div style="font-size:11px;color:var(--t3)">${it.sku||'No SKU'} · Ordered: ${it.qty}</div></div>
+      <input type="number" min="0" value="${it.qty}" id="recv_qty_${i}"
+        style="width:70px;padding:7px 10px;border:0.5px solid var(--b2);border-radius:var(--rs);font-size:14px;font-weight:700;text-align:center;font-family:inherit;background:var(--s2);color:var(--t);outline:none">
+    </div>
+  `).join('');
+  document.getElementById('receivePOModal').style.display='flex';
+}
+
+function confirmReceivePO(){
+  const po=PO_ORDERS.find(p=>p.id===poReceivingId);if(!po)return;
+  const items=Array.isArray(po.items)?po.items:[];
+  const deliveryRef=(document.getElementById('receivePORef').value||'').trim();
+  // Read received quantities and optionally update PRODUCTS stock
+  items.forEach((it,i)=>{
+    const el=document.getElementById('recv_qty_'+i);
+    const receivedQty=parseInt((el?el.value:it.qty))||0;
+    it.receivedQty=receivedQty;
+    // Auto-update product stock by matching SKU
+    if(it.sku){
+      const prod=PRODUCTS.find(p=>p.sku===it.sku);
+      if(prod){prod.qty=(prod.qty||0)+receivedQty;}
+    }
+  });
+  po.status='Received';
+  po.receivedAt=new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'});
+  po.deliveryRef=deliveryRef||'—';
+  document.getElementById('receivePOModal').style.display='none';
+  renderPOPage();
+  showToast(poReceivingId+' received — stock updated ✓','success');
+}
+
 // ── Returns ──
 let RETURNS=[]; // {id,repKey,repName,custKey,custName,items:[{name,sku,qty,note}],total,status,createdAt,receivedAt,creditApproved}
 
@@ -4436,7 +4672,7 @@ const IC={
   bar:SV('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>'),
   cog:SV('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33H15a1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>'),
 };
-const PT={'p-a-dash':'Dashboard','p-a-dists':'Distributor Channel','p-a-distdiscount':'Selective Discounts','p-a-reps':'Sales Rep Performance','p-a-managereps':'Manage Rep Accounts','p-a-managecusts':'Manage Customers','p-a-manageprods':'Manage Products','p-a-slowstock':'Non-Moving Stock','p-a-cashback':'Featured Cashback Products','p-a-offers':'Offers Board','p-a-import':'Import Centre — Chart360','p-a-pnl':'Profit & Loss','p-a-agent':'Support','p-a-access':'Access & Permissions','p-a-settings':'Commission & Cashback Settings','p-a-visits':'Visit Tracker','p-a-wasettings':'WhatsApp & Warehouse','p-d-dash':'My Dashboard','p-d-catalog':'Product Catalog','p-d-order':'Place Order','p-d-history':'My Orders','p-r-dash':'My Dashboard','p-r-customers':'My Customers','p-r-cashback':'Cashback Offers','p-r-order':'Place Order','p-r-myorders':'My Orders','p-r-returns':'My Returns','p-w-returns':'Returns to Process','p-a-payments':'Payment Register','p-w-payments':'Record Payment','p-w-queue':'Orders to Dispatch','p-w-invoice':'Invoice Register','p-w-history':'Dispatch History','p-w-customers':'Customer Balances','p-w-promos':'Promotions & Offers','p-w-import':'Import from Chart360','p-w-returns':'Returns to Process','p-a-payments':'Payment Register','p-w-payments':'Record Payment'};
+const PT={'p-a-dash':'Dashboard','p-a-dists':'Distributor Channel','p-a-distdiscount':'Selective Discounts','p-a-reps':'Sales Rep Performance','p-a-managereps':'Manage Rep Accounts','p-a-managecusts':'Manage Customers','p-a-manageprods':'Manage Products','p-a-slowstock':'Non-Moving Stock','p-a-cashback':'Featured Cashback Products','p-a-offers':'Offers Board','p-a-import':'Import Centre — Chart360','p-a-pnl':'Profit & Loss','p-a-purchaseorders':'Purchase Orders','p-a-agent':'Support','p-a-access':'Access & Permissions','p-a-settings':'Commission & Cashback Settings','p-a-visits':'Visit Tracker','p-a-wasettings':'WhatsApp & Warehouse','p-d-dash':'My Dashboard','p-d-catalog':'Product Catalog','p-d-order':'Place Order','p-d-history':'My Orders','p-r-dash':'My Dashboard','p-r-customers':'My Customers','p-r-cashback':'Cashback Offers','p-r-order':'Place Order','p-r-myorders':'My Orders','p-r-returns':'My Returns','p-w-returns':'Returns to Process','p-a-payments':'Payment Register','p-w-payments':'Record Payment','p-w-queue':'Orders to Dispatch','p-w-invoice':'Invoice Register','p-w-history':'Dispatch History','p-w-customers':'Customer Balances','p-w-promos':'Promotions & Offers','p-w-import':'Import from Chart360','p-w-returns':'Returns to Process','p-a-payments':'Payment Register','p-w-payments':'Record Payment'};
 
 function buildSidebar(r){
   const nav=document.getElementById('sbNav');
@@ -4453,7 +4689,7 @@ function buildSidebar(r){
     nav.innerHTML=`<div class="sb-sec">Overview</div>${n('p-a-dash',IC.grid,'Dashboard')}
     <div class="sb-sec">Distributor Channel</div>${n('p-a-dists',IC.users,'All Distributors')}${n('p-a-distdiscount',IC.tag,'Selective Discounts')}
     <div class="sb-sec">Sales Rep Channel</div>${n('p-a-reps',IC.bar,'Rep Performance')}${n('p-a-visits',IC.users,'Visit Tracker')}${n('p-a-managereps',IC.users,'Manage Rep Accounts')}${n('p-a-manageprods',IC.tag,'Manage Products')}${n('p-a-managecusts',IC.tag,'Manage Customers')}${n('p-a-offers',IC.bell,'Offers Board')}${n('p-a-cashback',IC.tag,'Cashback Products')}${n('p-a-slowstock',IC.bell,'Non-Moving Stock <span class="nb" style="background:var(--amber-bg);color:var(--amber)">18</span>')}
-    <div class="sb-sec">Finance</div>${n('p-a-allinvoices',IC.file,'All Invoices')}${n('p-a-payments',IC.dollar,'Payment Register')}${n('p-a-pnl',IC.dollar,'Profit & Loss')}${n('p-a-import',IC.file,'Import from Chart360')}
+    <div class="sb-sec">Finance</div>${n('p-a-allinvoices',IC.file,'All Invoices')}${n('p-a-payments',IC.dollar,'Payment Register')}${n('p-a-purchaseorders',IC.file,'Purchase Orders')}${n('p-a-pnl',IC.dollar,'Profit & Loss')}${n('p-a-import',IC.file,'Import from Chart360')}
     <div class="sb-sec">Support</div>${n('p-a-agent',IC.chat,'Support')}
     <div class="sb-sec">Settings</div>${n('p-a-access',IC.users,'Access & Permissions')}${n('p-a-settings',IC.cog,'Commission & Cashback')}${n('p-a-wasettings',IC.bell,'WhatsApp & Warehouse')}`;
   } else if(r==='dist'){
@@ -4529,6 +4765,7 @@ function goto(id,el){
   if(id==='p-r-returns')renderRepReturns();
   if(id==='p-w-returns')renderWhReturns();
   if(id==='p-a-payments')renderPaymentRegister();
+  if(id==='p-a-purchaseorders')renderPOPage();
   if(id==='p-w-payments')renderPaymentPage('wh');
   if(id==='p-w-invoice'){loadInvoicesFromDB().then(()=>renderInvoiceRegister());}
   if(id==='p-r-invoices'){loadInvoicesFromDB().then(()=>renderAllInvoices('rep','ai-rep-wrap'));}
