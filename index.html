@@ -14,6 +14,7 @@
 <link rel="apple-touch-icon" id="pwa-icon">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root{
   --bg:#f4f3ef;--s:#fff;--s2:#f9f8f5;
@@ -1330,8 +1331,8 @@ tr:hover td{background:var(--s2)}
           <div id="invDropZone" onclick="document.getElementById('invFileInput').click()"
             style="border:2px dashed var(--b2);border-radius:var(--r);padding:28px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:12px;background:var(--s2)">
             <div style="font-size:28px;margin-bottom:8px">📂</div>
-            <div style="font-size:13px;font-weight:600;color:var(--t2)">Drop CSV file here or click to browse</div>
-            <div style="font-size:11px;color:var(--t3);margin-top:4px">Chart360 inventory export · CSV format</div>
+            <div style="font-size:13px;font-weight:600;color:var(--t2)">Drop file here or click to browse</div>
+            <div style="font-size:11px;color:var(--t3);margin-top:4px">Chart360 Inventory Valuation XLS (auto-detected) · or CSV</div>
             <input id="invFileInput" type="file" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleInvFile(this)">
           </div>
 
@@ -2398,9 +2399,9 @@ Please log in to the portal to approve or reject.</div>
         <div class="cb">
           <div id="wInvDrop" onclick="document.getElementById('wInvFile').click()" style="border:2px dashed var(--b2);border-radius:var(--r);padding:24px;text-align:center;cursor:pointer;background:var(--s2);margin-bottom:10px">
             <div style="font-size:24px;margin-bottom:6px">📂</div>
-            <div style="font-size:13px;font-weight:600;color:var(--t2)">Click to upload inventory CSV</div>
-            <div style="font-size:11px;color:var(--t3);margin-top:3px">From Chart360 stock report</div>
-            <input id="wInvFile" type="file" accept=".csv" style="display:none" onchange="handleInvFile(this,'w')">
+            <div style="font-size:13px;font-weight:600;color:var(--t2)">Click to upload inventory file</div>
+            <div style="font-size:11px;color:var(--t3);margin-top:3px">Chart360 Inventory Valuation XLS · or CSV</div>
+            <input id="wInvFile" type="file" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleInvFile(this,'w')">
           </div>
           <div id="wInvMapping" style="display:none;margin-bottom:10px">
             <div style="font-size:11px;font-weight:600;color:var(--t2);margin-bottom:6px">Match columns:</div>
@@ -6492,11 +6493,74 @@ function populateSels(headers,required,optional){
 }
 
 // ── INVENTORY ──
+// Detect Chart360 Inventory Valuation XLS structure:
+// Row 0: "Inventory Valuation Report"; Row 7: headers (col0=Category/SKU, col1=Name, col4=Quantity, col6=Standard Cost)
+function parseChart360InvXLS(wb){
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+  // Confirm it's the Inventory Valuation Report
+  const title=String(raw[0]&&raw[0][0]||'').toLowerCase();
+  if(!title.includes('inventory valuation'))return null;
+  // Parse rows: product rows have a numeric value in col 4 (Quantity)
+  const rows=[];
+  for(let i=8;i<raw.length;i++){
+    const r=raw[i];
+    const qty=parseFloat(r[4]);
+    if(!r||!r[1]||isNaN(qty))continue; // skip category headers / empty rows
+    const sku=String(r[0]||'').trim();
+    const name=String(r[1]||'').trim();
+    const cost=parseFloat(r[6])||0;
+    if(!name)continue;
+    rows.push({'SKU':sku,'Product Name':name,'Quantity':qty,'Standard Cost':cost});
+  }
+  return{headers:['SKU','Product Name','Quantity','Standard Cost'],rows,autoDetected:true};
+}
+
 function handleInvFile(input,prefix){
   const p=prefix||'';const file=input.files[0];if(!file)return;
+  const isXLS=/\.(xlsx|xls)$/i.test(file.name);
   const reader=new FileReader();
   reader.onload=e=>{
-    invCSVData=parseCSV(e.target.result);
+    let parsed=null;
+    if(isXLS&&typeof XLSX!=='undefined'){
+      try{
+        const wb=XLSX.read(e.target.result,{type:'array'});
+        // Try Chart360 Inventory Valuation auto-detect first
+        const c360=parseChart360InvXLS(wb);
+        if(c360){
+          invCSVData=c360;
+          const dz=document.getElementById((p?'wInv':'inv')+'Drop');
+          if(dz){dz.style.borderColor='var(--teal)';dz.style.background='var(--teal-bg)';dz.innerHTML=`<div style="font-size:20px;margin-bottom:5px">✅</div><div style="font-size:13px;font-weight:600;color:var(--teal)">${file.name}</div><div style="font-size:11px;color:var(--t3);margin-top:3px">📊 Chart360 Inventory Valuation — <strong>${invCSVData.rows.length}</strong> products auto-detected</div><div style="font-size:11px;color:var(--teal);margin-top:4px">SKU · Name · Qty · Cost mapped automatically ✓</div>`;}
+          const badge=document.getElementById((p?'wInv':'invImport')+'Badge');
+          if(badge){badge.style.display='inline-flex';badge.textContent=invCSVData.rows.length+' rows';}
+          // Hide column mapping — not needed
+          const mapping=document.getElementById((p?'wInv':'inv')+'Mapping');
+          if(mapping)mapping.style.display='none';
+          // Auto-populate hidden selects so confirmInvImport works
+          const pre2=p?'wInvCol':'invCol';
+          ['Name','Qty','SKU','Cost','Price'].forEach(k=>{
+            const sel=document.getElementById(pre2+k);
+            if(!sel)return;
+            if(k==='Name')sel.value='Product Name';
+            else if(k==='Qty')sel.value='Quantity';
+            else if(k==='SKU')sel.value='SKU';
+            else if(k==='Cost')sel.value='Standard Cost';
+            else sel.value='';
+          });
+          // Show auto-import button
+          previewInvImport(p);
+          return;
+        }
+        // Fallback: generic XLS — flatten to CSV-like rows using first sheet headers
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        parsed=XLSX.utils.sheet_to_json(ws,{defval:''});
+        const headers=parsed.length?Object.keys(parsed[0]):[];
+        invCSVData={headers,rows:parsed};
+      }catch(err){console.warn('XLS parse error',err);}
+    }
+    if(!parsed){
+      invCSVData=parseCSV(e.target.result);
+    }
     const mapping=document.getElementById((p?'wInv':'inv')+'Mapping');
     if(mapping)mapping.style.display='block';
     const prefix2=p?'wInvCol':'invCol';
@@ -6506,32 +6570,52 @@ function handleInvFile(input,prefix){
     const badge=document.getElementById((p?'wInv':'invImport')+'Badge');
     if(badge){badge.style.display='inline-flex';badge.textContent=invCSVData.rows.length+' rows';}
   };
-  reader.readAsText(file);
+  if(isXLS&&typeof XLSX!=='undefined'){reader.readAsArrayBuffer(file);}
+  else{reader.readAsText(file);}
+}
+
+// Helper: find a PRODUCTS match by SKU first, then fuzzy name
+function findProdMatch(sku,name){
+  if(sku){
+    const bySku=PRODUCTS.find(x=>x.sku&&x.sku.toLowerCase()===sku.toLowerCase());
+    if(bySku)return bySku;
+  }
+  return PRODUCTS.find(x=>x.name.toLowerCase().includes(name.toLowerCase())||name.toLowerCase().includes(x.name.toLowerCase().slice(0,8)))||null;
+}
+function findSlowMatch(sku,name){
+  if(sku){const b=SLOW_STOCK.find(x=>x.sku&&x.sku.toLowerCase()===sku.toLowerCase());if(b)return b;}
+  return SLOW_STOCK.find(x=>x.name.toLowerCase().includes(name.toLowerCase())||name.toLowerCase().includes(x.name.toLowerCase().slice(0,8)))||null;
 }
 
 function previewInvImport(prefix){
   if(!invCSVData)return;
   const p=prefix||'';
   const pre2=p?'wInvCol':'invCol';
-  const nameCol=document.getElementById(pre2+'Name').value;
-  const qtyCol=document.getElementById(pre2+'Qty').value;
+  const nameColEl=document.getElementById(pre2+'Name');
+  const qtyColEl=document.getElementById(pre2+'Qty');
+  // For auto-detected Chart360 format, use fixed field names
+  const nameCol=invCSVData.autoDetected?'Product Name':(nameColEl?nameColEl.value:'');
+  const qtyCol=invCSVData.autoDetected?'Quantity':(qtyColEl?qtyColEl.value:'');
+  const skuCol=invCSVData.autoDetected?'SKU':((document.getElementById(pre2+'SKU')?.value)||'');
   if(!nameCol||!qtyCol){showImportMsg('inv','Please select Product Name and Quantity columns.','var(--red)',p);return;}
   let matched=0,unmatched=0;
-  const rows=invCSVData.rows.filter(r=>r[nameCol]&&r[nameCol].trim()).map(r=>{
-    const name=r[nameCol].trim();
-    const qty=parseInt(r[qtyCol])||0;
-    const prod=PRODUCTS.find(p=>p.name.toLowerCase().includes(name.toLowerCase())||name.toLowerCase().includes(p.name.toLowerCase().slice(0,8)));
-    const slow=SLOW_STOCK.find(p=>p.name.toLowerCase().includes(name.toLowerCase())||name.toLowerCase().includes(p.name.toLowerCase().slice(0,8)));
+  const rows=invCSVData.rows.filter(r=>r[nameCol]&&String(r[nameCol]).trim()).map(r=>{
+    const name=String(r[nameCol]).trim();
+    const qty=parseFloat(r[qtyCol])||0;
+    const sku=skuCol?String(r[skuCol]||'').trim():'';
+    const prod=findProdMatch(sku,name);
+    const slow=!prod?findSlowMatch(sku,name):null;
     if(prod||slow)matched++;else unmatched++;
-    return{name,qty,hit:!!(prod||slow)};
+    return{name,sku,qty,hit:!!(prod||slow)};
   });
   const prevEl=document.getElementById((p?'wInv':'inv')+'Preview');
   if(!prevEl)return;
   prevEl.style.display='block';
-  prevEl.innerHTML=`<div style="font-size:12px;color:var(--t2);margin-bottom:7px;font-weight:500">Preview: <span style="color:var(--green)">${matched} matched</span> · <span style="color:var(--t3)">${unmatched} new/unmatched</span></div>
+  const autoLabel=invCSVData.autoDetected?'<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--teal-bg);color:var(--teal);margin-left:6px">📊 Chart360 Auto</span>':'';
+  prevEl.innerHTML=`<div style="font-size:12px;color:var(--t2);margin-bottom:7px;font-weight:500">Preview: <span style="color:var(--green)">${matched} matched</span> · <span style="color:var(--t3)">${unmatched} new/unmatched</span>${autoLabel}</div>
   <div style="max-height:160px;overflow-y:auto;border:0.5px solid var(--b);border-radius:var(--rs);margin-bottom:8px">
-    <table style="width:100%;font-size:11px"><thead><tr style="background:var(--s2)"><th style="padding:5px 10px;text-align:left">Product</th><th style="padding:5px 10px;text-align:left">New Qty</th><th style="padding:5px 10px;text-align:left">Match</th></tr></thead>
-    <tbody>${rows.map(r=>`<tr style="border-bottom:0.5px solid var(--b)"><td style="padding:4px 10px">${r.name}</td><td style="padding:4px 10px;font-weight:700">${r.qty}</td><td style="padding:4px 10px"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:${r.hit?'var(--green-bg)':'var(--s2)'};color:${r.hit?'var(--green)':'var(--t3)'}">${r.hit?'✓ Match':'—'}</span></td></tr>`).join('')}</tbody></table>
+    <table style="width:100%;font-size:11px"><thead><tr style="background:var(--s2)"><th style="padding:5px 8px;text-align:left">SKU</th><th style="padding:5px 8px;text-align:left">Product</th><th style="padding:5px 8px;text-align:right">New Qty</th><th style="padding:5px 8px;text-align:left">Match</th></tr></thead>
+    <tbody>${rows.map(r=>`<tr style="border-bottom:0.5px solid var(--b)"><td style="padding:4px 8px;color:var(--t3);font-size:10px">${r.sku||'—'}</td><td style="padding:4px 8px">${r.name}</td><td style="padding:4px 8px;font-weight:700;text-align:right">${r.qty}</td><td style="padding:4px 8px"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:${r.hit?'var(--green-bg)':'var(--s2)'};color:${r.hit?'var(--green)':'var(--t3)'}">${r.hit?'✓ Match':'—'}</span></td></tr>`).join('')}</tbody></table>
   </div>
   <button class="btn btn-blue" style="width:100%;padding:8px" onclick="confirmInvImport('${p}')">✅ Import ${matched} matched products</button>`;
 }
@@ -6540,38 +6624,40 @@ function confirmInvImport(prefix){
   if(!invCSVData)return;
   const p=prefix||'';
   const pre2=p?'wInvCol':'invCol';
-  const nameCol=document.getElementById(pre2+'Name').value;
-  const qtyCol=document.getElementById(pre2+'Qty').value;
-  const costCol=document.getElementById(pre2+(p?'':'Cost'))?.value||'';
-  const priceCol=document.getElementById(pre2+(p?'':'Price'))?.value||'';
+  const nameCol=invCSVData.autoDetected?'Product Name':(document.getElementById(pre2+'Name')?.value||'');
+  const qtyCol=invCSVData.autoDetected?'Quantity':(document.getElementById(pre2+'Qty')?.value||'');
+  const skuCol=invCSVData.autoDetected?'SKU':(document.getElementById(pre2+'SKU')?.value||'');
+  const costCol=invCSVData.autoDetected?'Standard Cost':(document.getElementById(pre2+(p?'':'Cost'))?.value||'');
+  const priceCol=invCSVData.autoDetected?'':(document.getElementById(pre2+(p?'':'Price'))?.value||'');
   let updated=0,priceUpdated=0;
   invCSVData.rows.filter(r=>r[nameCol]).forEach(r=>{
-    const name=r[nameCol].trim();
-    const qty=parseInt(r[qtyCol])||0;
+    const name=String(r[nameCol]).trim();
+    const qty=parseFloat(r[qtyCol])||0;
+    const sku=skuCol?String(r[skuCol]||'').trim():'';
     const cost=costCol?parseFloat(r[costCol])||0:0;
     const price=priceCol?parseFloat(String(r[priceCol]).replace(/[^0-9.]/g,''))||0:0;
-    const prod=PRODUCTS.find(x=>x.name.toLowerCase().includes(name.toLowerCase())||name.toLowerCase().includes(x.name.toLowerCase().slice(0,8)));
+    const prod=findProdMatch(sku,name);
     if(prod){
       prod.avail=qty>10?'in':qty>0?'low':'out';
       prod.stockQty=qty;
+      if(sku&&!prod.sku)prod.sku=sku; // back-fill SKU if missing
       if(cost>0)prod.costPrice=cost;
       if(price>0){
         prod.base=price;
         Object.keys(prod.prices||{}).forEach(k=>prod.prices[k]=price);
         priceUpdated++;
       }
-      // Apply configured price tiers from CSV
       applyTierPrices(prod,r);
-      // Save to Supabase
-      dbUpdate('products',{avail:prod.avail,stock_qty:qty,cost_price:cost||prod.costPrice||0,base_price:prod.base||0,prices:prod.prices},{id:prod.id});
+      dbUpdate('products',{avail:prod.avail,stock_qty:qty,sku:prod.sku||'',cost_price:cost||prod.costPrice||0,base_price:prod.base||0,prices:prod.prices},{id:prod.id});
       updated++;
     }
-    const slow=SLOW_STOCK.find(x=>x.name.toLowerCase().includes(name.toLowerCase())||name.toLowerCase().includes(x.name.toLowerCase().slice(0,8)));
+    const slow=!prod?findSlowMatch(sku,name):null;
     if(slow){slow.qty=qty;if(cost>0)slow.cost=cost;updated++;}
   });
   const now=new Date().toLocaleString('en-GB',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
-  importHistory.unshift({time:now,type:'📦 Inventory',records:updated,status:'✅ Success'});
-  showImportMsg('inv',`✅ ${updated} products updated — stock levels refreshed${priceUpdated>0?', '+priceUpdated+' prices updated from Chart360':''}.`,'var(--green)',p);
+  const src=invCSVData.autoDetected?'📊 Chart360 Inv. Valuation':'📦 Inventory';
+  importHistory.unshift({time:now,type:src,records:updated,status:'✅ Success'});
+  showImportMsg('inv',`✅ ${updated} products updated — stock & cost refreshed${priceUpdated>0?', '+priceUpdated+' prices updated':''}.`,'var(--green)',p);
   const prevEl=document.getElementById((p?'wInv':'inv')+'Preview');if(prevEl)prevEl.style.display='none';
   renderImportHistory();
   invCSVData=null;
