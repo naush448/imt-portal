@@ -1431,8 +1431,8 @@ tr:hover td{background:var(--s2)}
         <div id="custDrop" onclick="document.getElementById('custFile').click()" ondragover="event.preventDefault()" ondrop="event.preventDefault();handleCustFile({files:event.dataTransfer.files})"
           style="border:2px dashed var(--amber);border-radius:var(--rs);padding:24px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:12px;background:var(--amber-bg)">
           <div style="font-size:28px;margin-bottom:6px">💰</div>
-          <div style="font-size:13px;font-weight:600;color:var(--amber)">Drop Customer Balances CSV here</div>
-          <div style="font-size:11px;color:var(--t3);margin-top:3px">or tap to browse</div>
+          <div style="font-size:13px;font-weight:600;color:var(--amber)">Drop Customer Balances file here</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:3px">Chart360 Customer Balances Summary XLS (auto-detected) · or CSV</div>
           <input id="custFile" type="file" accept=".csv,.xlsx,.xls" onchange="handleCustFile(this)" style="display:none">
         </div>
         <!-- Column mapping -->
@@ -6747,42 +6747,93 @@ function confirmRepImport(prefix){
 // ── CUSTOMER BALANCES ──
 let custCSVData=null;
 
+// Auto-detect Chart360 Customer Balances Summary XLS
+// Row 0: "Customer Balances Summary"; Row 11: header; Rows 12+: data (col0=name, col4=balance)
+function parseChart360CustXLS(wb){
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const raw=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+  const title=String(raw[0]&&raw[0][0]||'').toLowerCase();
+  if(!title.includes('customer balances'))return null;
+  const rows=[];
+  for(let i=12;i<raw.length;i++){
+    const r=raw[i];
+    const name=String(r[0]||'').trim();
+    const bal=parseFloat(r[4]);
+    if(!name||name==='Grand Total'||isNaN(bal))continue;
+    rows.push({'Customer Name':name,'Balance':bal});
+  }
+  return{headers:['Customer Name','Balance'],rows,autoDetected:true};
+}
+
 function handleCustFile(input,prefix){
   const p=prefix||'';const file=input.files[0];if(!file)return;
+  const isXLS=/\.(xlsx|xls)$/i.test(file.name);
   const reader=new FileReader();
   reader.onload=function(e){
-    custCSVData=parseCSV(e.target.result);
-    const mapping=document.getElementById((p?'wCust':'cust')+'Mapping');
-    if(mapping)mapping.style.display='block';
-    const pre2=p?'wCustCol':'custCol';
-    populateSels(custCSVData.headers,[pre2+'Name',pre2+'Balance'],[]);
-    // Auto-select balance column
-    const sel=document.getElementById(pre2+'Balance');
-    if(sel){
-      const lh=custCSVData.headers.map(h=>h.toLowerCase());
-      const i=lh.findIndex(h=>h.includes('balance')||h.includes('outstanding')||h.includes('amount')||h.includes('due')||h.includes('owing'));
-      if(i>=0)sel.value=custCSVData.headers[i];
+    if(isXLS&&typeof XLSX!=='undefined'){
+      try{
+        const wb=XLSX.read(e.target.result,{type:'array'});
+        const c360=parseChart360CustXLS(wb);
+        if(c360){
+          custCSVData=c360;
+          const dz=document.getElementById((p?'wCust':'cust')+'Drop');
+          if(dz){dz.style.borderColor='var(--amber)';dz.style.background='var(--amber-bg)';dz.innerHTML='<div style="font-size:20px;margin-bottom:5px">✅</div><div style="font-size:13px;font-weight:600;color:var(--amber)">'+file.name+'</div><div style="font-size:11px;color:var(--t3);margin-top:3px">📊 Chart360 Customer Balances — <strong>'+c360.rows.length+'</strong> customers auto-detected</div><div style="font-size:11px;color:var(--amber);margin-top:4px">Name · Balance mapped automatically ✓</div>';}
+          const badge=document.getElementById((p?'wCust':'custImport')+'Badge');
+          if(badge){badge.style.display='inline-flex';badge.textContent=c360.rows.length+' customers';}
+          const mapping=document.getElementById((p?'wCust':'cust')+'Mapping');
+          if(mapping)mapping.style.display='none';
+          // Pre-fill hidden selects
+          const pre2=p?'wCustCol':'custCol';
+          const ns=document.getElementById(pre2+'Name');if(ns)ns.value='Customer Name';
+          const bs=document.getElementById(pre2+'Balance');if(bs)bs.value='Balance';
+          previewCustImport(p);
+          return;
+        }
+        // Generic XLS fallback
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const parsed=XLSX.utils.sheet_to_json(ws,{defval:''});
+        const headers=parsed.length?Object.keys(parsed[0]):[];
+        custCSVData={headers,rows:parsed};
+        finishCustFileLoad(p,file.name);
+        return;
+      }catch(err){console.warn('XLS cust parse error',err);}
     }
-    const dz=document.getElementById((p?'wCust':'cust')+'Drop');
-    if(dz){dz.style.borderColor='var(--amber)';dz.style.background='var(--amber-bg)';dz.innerHTML='<div style="font-size:20px;margin-bottom:5px">✅</div><div style="font-size:13px;font-weight:600;color:var(--amber)">'+file.name+'</div><div style="font-size:11px;color:var(--t3);margin-top:3px">'+custCSVData.rows.length+' rows detected</div>';}
+    custCSVData=parseCSV(e.target.result);
+    finishCustFileLoad(p,file.name);
   };
-  reader.readAsText(file);
+  if(isXLS&&typeof XLSX!=='undefined'){reader.readAsArrayBuffer(file);}
+  else{reader.readAsText(file);}
+}
+
+function finishCustFileLoad(p,fname){
+  const mapping=document.getElementById((p?'wCust':'cust')+'Mapping');
+  if(mapping)mapping.style.display='block';
+  const pre2=p?'wCustCol':'custCol';
+  populateSels(custCSVData.headers,[pre2+'Name',pre2+'Balance'],[]);
+  const sel=document.getElementById(pre2+'Balance');
+  if(sel){
+    const lh=custCSVData.headers.map(h=>h.toLowerCase());
+    const i=lh.findIndex(h=>h.includes('balance')||h.includes('outstanding')||h.includes('amount')||h.includes('due')||h.includes('owing'));
+    if(i>=0)sel.value=custCSVData.headers[i];
+  }
+  const dz=document.getElementById((p?'wCust':'cust')+'Drop');
+  if(dz){dz.style.borderColor='var(--amber)';dz.style.background='var(--amber-bg)';dz.innerHTML='<div style="font-size:20px;margin-bottom:5px">✅</div><div style="font-size:13px;font-weight:600;color:var(--amber)">'+(fname||'File')+'</div><div style="font-size:11px;color:var(--t3);margin-top:3px">'+custCSVData.rows.length+' rows detected</div>';}
 }
 
 function previewCustImport(prefix){
   if(!custCSVData)return;
   const p=prefix||'';
   const pre2=p?'wCustCol':'custCol';
-  const nameCol=document.getElementById(pre2+'Name').value;
-  const balCol=document.getElementById(pre2+'Balance').value;
+  const nameCol=custCSVData.autoDetected?'Customer Name':(document.getElementById(pre2+'Name')?.value||'');
+  const balCol=custCSVData.autoDetected?'Balance':(document.getElementById(pre2+'Balance')?.value||'');
   if(!nameCol||!balCol){showImportMsg('cust','Please select Customer Name and Balance columns.','var(--red)',p);return;}
   let matched=0,unmatched=0;
-  const rows=custCSVData.rows.filter(r=>r[nameCol]&&r[nameCol].trim()).map(r=>{
-    const name=r[nameCol].trim();
+  const normName=n=>n.toLowerCase().replace(/\s*(azaf|nakas|thiax|thiaxkanth)\s*/gi,'').trim();
+  const rows=custCSVData.rows.filter(r=>r[nameCol]&&String(r[nameCol]).trim()).map(r=>{
+    const name=String(r[nameCol]).trim();
     const balance=parseFloat((r[balCol]||'').toString().replace(/[^0-9.-]/g,''))||0;
     const custKey=Object.keys(CUSTOMERS).find(k=>{
-      const cn=CUSTOMERS[k].name.toLowerCase().replace(/\s*(azaf|nakas|thiax|thiaxkanth)\s*/gi,'').trim();
-      const rn=name.toLowerCase().replace(/\s*(azaf|nakas|thiax|thiaxkanth)\s*/gi,'').trim();
+      const cn=normName(CUSTOMERS[k].name);const rn=normName(name);
       return cn===rn||cn.includes(rn)||rn.includes(cn);
     });
     if(custKey)matched++;else unmatched++;
@@ -6791,39 +6842,45 @@ function previewCustImport(prefix){
   const prevEl=document.getElementById((p?'wCust':'cust')+'Preview');
   if(!prevEl)return;
   prevEl.style.display='block';
-  prevEl.innerHTML='<div style="font-size:12px;color:var(--t2);margin-bottom:7px;font-weight:500">Preview: <span style="color:var(--green)">'+matched+' matched</span> · <span style="color:var(--t3)">'+unmatched+' unmatched</span></div>'
+  const autoLabel=custCSVData.autoDetected?'<span style="font-size:10px;padding:2px 8px;border-radius:20px;background:var(--amber-bg);color:var(--amber);margin-left:6px">📊 Chart360 Auto</span>':'';
+  prevEl.innerHTML='<div style="font-size:12px;color:var(--t2);margin-bottom:7px;font-weight:500">Preview: <span style="color:var(--green)">'+matched+' matched</span> · <span style="color:var(--t3)">'+unmatched+' unmatched</span>'+autoLabel+'</div>'
     +'<div style="max-height:180px;overflow-y:auto;border:0.5px solid var(--b);border-radius:var(--rs);margin-bottom:8px">'
       +'<table style="width:100%;font-size:11px"><thead><tr style="background:var(--s2)"><th style="padding:5px 10px;text-align:left">Customer</th><th style="padding:5px 10px;text-align:right">Balance</th><th style="padding:5px 10px">Match</th></tr></thead>'
-      +'<tbody>'+rows.slice(0,50).map(r=>'<tr style="border-bottom:0.5px solid var(--b)"><td style="padding:4px 10px">'+r.name+'</td><td style="padding:4px 10px;text-align:right;font-weight:700;color:var(--amber)">LKR '+r.balance.toLocaleString()+'</td><td style="padding:4px 10px;text-align:center"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:'+(r.matched?'var(--green-bg)':'var(--s2)')+';color:'+(r.matched?'var(--green)':'var(--t3)')+'">'+( r.matched?'✓':'—')+'</span></td></tr>').join('')+'</tbody>'
+      +'<tbody>'+rows.slice(0,80).map(r=>'<tr style="border-bottom:0.5px solid var(--b)"><td style="padding:4px 10px">'+r.name+'</td><td style="padding:4px 10px;text-align:right;font-weight:700;color:'+(r.balance<0?'var(--green)':'var(--amber)')+'">LKR '+Math.abs(r.balance).toLocaleString()+(r.balance<0?' CR':'')+'</td><td style="padding:4px 10px;text-align:center"><span style="font-size:10px;padding:2px 7px;border-radius:20px;background:'+(r.matched?'var(--green-bg)':'var(--s2)')+';color:'+(r.matched?'var(--green)':'var(--t3)')+'">'+( r.matched?'✓':'—')+'</span></td></tr>').join('')+'</tbody>'
     +'</table></div>'
-    +'<button class="btn btn-amber" style="width:100%;padding:8px;background:var(--amber);color:#fff;border-color:var(--amber)" onclick="confirmCustImport(\''+p+'\')">✅ Update '+matched+' customer balances</button>';
+    +'<button class="btn btn-amber" style="width:100%;padding:8px;background:var(--amber);color:#fff;border-color:var(--amber)" onclick="confirmCustImport(\''+p+'\')">✅ Set opening balances for '+matched+' customers</button>';
 }
 
 async function confirmCustImport(prefix){
   if(!custCSVData)return;
   const p=prefix||'';
   const pre2=p?'wCustCol':'custCol';
-  const nameCol=document.getElementById(pre2+'Name').value;
-  const balCol=document.getElementById(pre2+'Balance').value;
+  const nameCol=custCSVData.autoDetected?'Customer Name':(document.getElementById(pre2+'Name')?.value||'');
+  const balCol=custCSVData.autoDetected?'Balance':(document.getElementById(pre2+'Balance')?.value||'');
   let updated=0;
   const updates=[];
+  const normName=n=>n.toLowerCase().replace(/\s*(azaf|nakas|thiax|thiaxkanth)\s*/gi,'').trim();
   custCSVData.rows.filter(r=>r[nameCol]).forEach(r=>{
-    const name=r[nameCol].trim();
+    const name=String(r[nameCol]).trim();
     const balance=parseFloat((r[balCol]||'').toString().replace(/[^0-9.-]/g,''))||0;
     const custKey=Object.keys(CUSTOMERS).find(k=>{
-      const cn=CUSTOMERS[k].name.toLowerCase().replace(/\s*(azaf|nakas|thiax|thiaxkanth)\s*/gi,'').trim();
-      const rn=name.toLowerCase().replace(/\s*(azaf|nakas|thiax|thiaxkanth)\s*/gi,'').trim();
+      const cn=normName(CUSTOMERS[k].name);const rn=normName(name);
       return cn===rn||cn.includes(rn)||rn.includes(cn);
     });
-    if(custKey){CUSTOMERS[custKey].outstanding=balance;updates.push({key:custKey,balance});updated++;}
+    if(custKey){
+      CUSTOMERS[custKey].outstanding=balance;
+      CUSTOMERS[custKey].openingBalance=balance; // tag as opening balance
+      updates.push({key:custKey,balance});updated++;
+    }
   });
   // Save all to Supabase
   for(var i=0;i<updates.length;i++){
     await updateCustomerOutstandingInDB(updates[i].key,updates[i].balance);
   }
   const now=new Date().toLocaleString('en-GB',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
-  importHistory.unshift({time:now,type:'💰 Customer Balances',records:updated,status:'✅ Success'});
-  showImportMsg('cust','✅ '+updated+' customer balances updated in portal and Supabase.','var(--green)',p);
+  const src=custCSVData.autoDetected?'💰 Opening Balances (Chart360)':'💰 Customer Balances';
+  importHistory.unshift({time:now,type:src,records:updated,status:'✅ Success'});
+  showImportMsg('cust','✅ '+updated+' opening balances set from Chart360 — customers now show correct outstanding.','var(--green)',p);
   const prevEl=document.getElementById((p?'wCust':'cust')+'Preview');if(prevEl)prevEl.style.display='none';
   renderImportHistory();custCSVData=null;
 }
